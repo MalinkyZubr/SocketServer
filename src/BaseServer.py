@@ -62,7 +62,10 @@ class BaseServer:
         print(data)
         target_ip = data['destination_ip']
         target_connection = self.find_connection(target_ip=target_ip)
-        buffer.send_all(fragmented_data, target_connection)
+        try:    
+            buffer.send_all(fragmented_data, target_connection)
+        except Exception as e:
+            print("Destination address not found")
         
     def accept_connection(self):
         print("[!] awaiting connection request")
