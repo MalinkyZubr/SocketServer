@@ -26,7 +26,7 @@ class Client:
 
 
 class BaseServer:
-    def __init__(self, *args, ip='127.0.0.1', port=8000, encrypted=False, timeout=1000, schema=None):
+    def __init__(self, *args, ip='127.0.0.1', port=8000, encrypted=False, timeout=1000, schema=None, cert_dir=None, key_dir=None):
         self.connections = []
         self.functions = list(args)
         self.ip = ip
@@ -34,7 +34,8 @@ class BaseServer:
         self.hostname = socket.gethostbyaddr(ip)
         self.sel = selectors.DefaultSelector()
 
-        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        self.context.load_cert_chain(cert_dir, key_dir)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.settimeout(timeout)
         self.sock.setblocking(False)
@@ -65,7 +66,8 @@ class BaseServer:
         
     def accept_connection(self):
         print("[!] awaiting connection request")
-        conn, addr = self.sock.accept()
+        with self.context.wrap_socket(self.sock, server_side=True) as ssock:
+            conn, addr = ssock.accept()
         conn.setblocking(False)
         print("[+] connection established")
         client = Client(ip=addr[0], conn=conn, hostname=socket.gethostbyaddr(addr[0]))

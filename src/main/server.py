@@ -12,5 +12,8 @@ from BaseServer import BaseServer
 
 
 if __name__ == "__main__":
-    server = BaseServer()
+    server = BaseServer(
+                        cert_dir=r'C:\Users\ahuma\Desktop\certs\cert.pem',
+                        key_dir=r'C:\Users\ahuma\Desktop\certs\private.key'
+                       )
     server.start()
