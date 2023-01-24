@@ -20,7 +20,7 @@ class BaseClient(BaseSocketOperator):
         self.sock.connect((ip, port))
 
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        context.load_verify_locations()
+        context.load_verify_locations(capath=r'C:\Users\ahuma\Desktop\programming\Networking\SocketServer\ca.crt')
 
         with context.wrap_socket(self.sock, server_hostname=ip) as ssock:
             self.sock = ssock
