@@ -5,6 +5,10 @@ from typing import Type, IO
 from schemas import BaseSchema
 
 
+DEFAULT_ROUTE: str = "0.0.0.0"
+LOCALHOST: str = "127.0.0.1"
+
+
 class Connection:
     def __init__(self, ip: str, conn: IO, hostname: str):
         self.ip = ip
@@ -29,10 +33,10 @@ class BaseSocketOperator:
     def get_buffer_size(self):
         return self.__buffer_size
     
-    def unpack_data(self, data):
+    def __unpack_data(self, data):
         return json.loads(data.decode('utf-8'))
 
-    def pack_data(self, data):
+    def __pack_data(self, data):
         return json.dumps(data).encode('utf-8')
 
     def construct_message(self, origin_ip: str, destination_ip: str, message_type: str, request_body: str | list | dict | int | float) -> Type[BaseSchema]:
@@ -43,17 +47,17 @@ class BaseSocketOperator:
         message.request_body = request_body
         return message
 
-    def calculate_data_length(self, data):
+    def __calculate_data_length(self, data):
         num_fragments = int(len(data) / self.__buffer_size) # what about the edgecase where the data size is a multiple of the self size?
         return num_fragments
 
-    def prepare_all(self, package: Type[BaseSchema]):
+    def __prepare_all(self, package: Type[BaseSchema]) -> list:
         package.time = str(datetime.datetime.now().strftime("%H:%M:%S"))
 
         package = package.dict()
 
-        encoded_data = self.pack_data(package)
-        fragments = self.calculate_data_length(encoded_data)
+        encoded_data = self.__pack_data(package)
+        fragments = self.__calculate_data_length(encoded_data)
         encoded_data_fragments = []
         for x in range(fragments):
             data_index = x * self.__buffer_size
@@ -63,11 +67,11 @@ class BaseSocketOperator:
                 encoded_data_fragments.append(encoded_data[data_index:data_index + self.__buffer_size])
                 
         if len(encoded_data_fragments[-1]) == self.__buffer_size:
-            encoded_data_fragments.append(self.pack_data("end"))
+            encoded_data_fragments.append(self.__pack_data("end"))
 
         return encoded_data_fragments
 
-    def send_all(self, data, connection: Connection):
+    def __send_all(self, data: list, connection: Connection):
         for fragment in data: 
             connection.conn.send(fragment)
 
@@ -79,4 +83,4 @@ class BaseSocketOperator:
             length = len(loop_data)
             aggregate_data.append(loop_data)
         
-        return aggregate_data, self.unpack_data(b"".join(aggregate_data))
+        return aggregate_data, self.__unpack_data(b"".join(aggregate_data))

@@ -6,21 +6,22 @@ import logging
 import time
 import sys
 import ssl
-from BaseSocketOperator import BaseSocketOperator, Connection
+from SocketOperations import BaseSocketOperator, Connection
+import SocketOperations
 
 
 class BaseServer(BaseSocketOperator):
-    def __init__(self, ip='127.0.0.1', port=8000, timeout: int=1000, buffer_size: int = 4096, cert_dir=None, key_dir=None):
+    def __init__(self, ip: str=SocketOperations.LOCALHOST, port: int=8000, timeout: int=1000, buffer_size: int=4096, cert_dir=None, key_dir=None):
         self.set_buffer_size(buffer_size)
         self.connections = []
-        self.ip = ip
-        self.port = port
-        self.hostname = socket.gethostbyaddr(ip)
+        self.ip: str = ip
+        self.port: int = port
+        self.hostname: str = socket.gethostbyaddr(ip)
         self.sel = selectors.DefaultSelector()
 
         # SSL Setup
         self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        self.context.load_cert_chain(cert_dir, key_dir)
+        self.context.load_cert_chain(certfile=cert_dir, keyfile=key_dir)
 
         # Socket Setup
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -45,7 +46,7 @@ class BaseServer(BaseSocketOperator):
         destination_ip = agg_data.get('destination_ip')
         try:    
             destination_connection: Connection = self.__find_connection(destination_ip)
-            self.send_all(frag_data, destination_connection) # add function to return error to origin Connection
+            self.__send_all(frag_data, destination_connection) # add function to return error to origin Connection
         except Exception as e:
             print("Destination address not found")
         
