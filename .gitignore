@@ -5,3 +5,4 @@ tests
 *.egg-info
 certs
 dist
+CustomizeableSocketServer.egg-info

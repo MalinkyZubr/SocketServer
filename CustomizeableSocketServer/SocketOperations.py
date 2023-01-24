@@ -2,7 +2,8 @@ import socket
 import json
 import datetime
 from typing import Type, IO
-from schemas import BaseSchema
+from schemas import BaseSchema, BaseBody, FileBody
+import base64 as b64
 
 
 DEFAULT_ROUTE: str = "0.0.0.0"
@@ -34,12 +35,20 @@ class BaseSocketOperator:
         return self.__buffer_size
     
     def __unpack_data(self, data):
-        return json.loads(data.decode('utf-8'))
+        return json.loads(data.decode())
 
     def __pack_data(self, data):
-        return json.dumps(data).encode('utf-8')
+        return json.dumps(data).encode()
 
-    def construct_message(self, origin_ip: str, destination_ip: str, message_type: str, request_body: str | list | dict | int | float) -> Type[BaseSchema]:
+    def __load_file(self, file_path: str) -> bytes:
+        with open(file_path, 'rb') as f:
+            return base64.b64encode(f.read()).decode('utf-8')
+
+    def __download_file(self, data: bytes, file_path: str):
+        with open(file_path, 'wb') as f:
+            f.write(base64.b64decode(data))
+
+    def construct_message(self, origin_ip: str, destination_ip: str, message_type: str, request_body: Type[BaseBody]) -> Type[BaseSchema]:
         message = BaseSchema()
         message.origin_ip = origin_ip
         message.destination_ip = destination_ip
@@ -82,5 +91,8 @@ class BaseSocketOperator:
             loop_data = connection.conn.recv(self.__buffer_size)
             length = len(loop_data)
             aggregate_data.append(loop_data)
+
+        if self.__unpack_data(aggregate_data[-1]) == 'end': # in case the message is an exact multiple of the buffer size
+            aggregate_data = aggregate_data[:-1]
         
         return aggregate_data, self.__unpack_data(b"".join(aggregate_data))

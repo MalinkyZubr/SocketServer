@@ -1,4 +1,3 @@
 1. fix encryption so that it doesnt throw errors, figure out the certifications
-2. fix the 4096 edge case in the SocketOperations class
-3. add either remote or direct interfacing for the Server to modify functionality
-4. add support for file transfer
+2. add either remote or direct interfacing for the Server to modify functionality
+3. add support for file transfer
