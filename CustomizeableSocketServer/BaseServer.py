@@ -2,18 +2,16 @@ import selectors
 import socket
 import json
 from typing import Optional, Union
-from pydantic import BaseModel
 import logging
 import time
 import sys
 import ssl
-from schemas import BaseSchema
-from buffer import buffer
-from Connection import Connection
+from BaseSocketOperator import BaseSocketOperator, Connection
 
 
-class BaseServer:
-    def __init__(self, ip='127.0.0.1', port=8000, encrypted=False, timeout=1000, schema=None, cert_dir=None, key_dir=None):
+class BaseServer(BaseSocketOperator):
+    def __init__(self, ip='127.0.0.1', port=8000, timeout: int=1000, buffer_size: int = 4096, cert_dir=None, key_dir=None):
+        self.set_buffer_size(buffer_size)
         self.connections = []
         self.ip = ip
         self.port = port
@@ -31,23 +29,23 @@ class BaseServer:
         self.sock.bind((ip, port))
         self.sock.listen(10)
 
-    def __find_connection(self, target_ip: str) -> Connection | bool:
+    def __find_connection(self, destination_ip: str) -> Connection | bool:
         for connection in self.connections:
-            if connection.ip == target_ip:
+            if connection.ip == destination_ip:
                 return connection
             raise Exception("Connection not found")
 
     def process_requests(self, connection: Connection):
         try:
-            frag_data, agg_data = buffer.recv_all(connection.conn) # 
+            frag_data, agg_data = self.recv_all(connection.conn) # 
         except json.decoder.JSONDecodeError:
             self.sel.unregister(connection.conn)
             self.connections.remove(connection)
 
-        target_ip = agg_data.get('destination_ip')
+        destination_ip = agg_data.get('destination_ip')
         try:    
-            target_connection: Connection = self.__find_connection(target_ip=target_ip)
-            buffer.send_all(frag_data, target_connection) # add function to return error to origin Connection
+            destination_connection: Connection = self.__find_connection(destination_ip)
+            self.send_all(frag_data, destination_connection) # add function to return error to origin Connection
         except Exception as e:
             print("Destination address not found")
         

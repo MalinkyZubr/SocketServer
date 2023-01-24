@@ -8,12 +8,13 @@ import time
 import sys
 import ssl
 from schemas import BaseSchema
-from buffer import buffer
-from Connection import Connection
+from BaseSocketOperator import BaseSocketOperator, Connection
 
 
-class BaseClient:
+class BaseClient(BaseSocketOperator):
     def __init__(self, ip: str, port=8000):
+        self.set_buffer_size(buffer_size)
+
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((ip, port))
 
@@ -26,8 +27,8 @@ class BaseClient:
 
     def echo(self, data):
         while True:
-            buffer.send_all(data, self.sock)
-            received = buffer.unpack_data(buffer.recv_all(self.sock))
+            self.send_all(data, self.sock)
+            received = self.unpack_data(self.recv_all(self.sock))
             print(f"RECEIVED_DATA: {received}\n LENGTH: {len(received['request_body'])}")
             time.sleep(15)
 
