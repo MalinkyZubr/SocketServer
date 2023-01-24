@@ -1,0 +1,2 @@
+[console_scripts]
+CustomizeableSocketServer = CustomizeableSocketServer.__main__:server

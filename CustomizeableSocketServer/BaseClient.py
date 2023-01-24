@@ -9,17 +9,20 @@ import sys
 import ssl
 from schemas import BaseSchema
 from buffer import buffer
+from Connection import Connection
 
 
 class BaseClient:
-    def __init__(self, ip='127.0.0.1', port=8000, encryption=True):
+    def __init__(self, ip: str, port=8000):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((ip, port))
+
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         context.load_verify_locations()
+
         with context.wrap_socket(self.sock, server_hostname=ip) as ssock:
             self.sock = ssock
-        buffer.set_origin_ip(ip)
+        self.connection = Connection(ip, self.sock, socket.gethostbyaddr(ip))
 
     def echo(self, data):
         while True:

@@ -8,14 +8,14 @@ import time
 
 
 class BaseSchema(BaseModel):
-    origin_ip: str = '127.0.0.1'
+    origin_ip: str
+    destination_ip: str 
     t: str = 'standard'
-    destination_ip: str = '127.0.0.1'
-    time: str="NA"
-    request_body: str | list | dict | int | float=""
+    time: str
+    request_body: str | list | dict | int | float
 
 class PingSchema(BaseModel):
-    destination_ip: str = '127.0.0.1'
+    destination_ip: str
     t: str = 'ping'
 
 
