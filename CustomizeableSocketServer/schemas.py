@@ -8,7 +8,7 @@ import time
 
 
 class BaseBody(BaseModel):
-    request_body: str | dict | list = ""
+    content: str | dict | list = ""
 
 
 class FileBody(BaseBody):
@@ -17,9 +17,13 @@ class FileBody(BaseBody):
     file_content: bytes
 
 
+class CommandBody(BaseBody):
+    command: str
+    kwargs: dict
+
+
 class BaseSchema(BaseModel):
     origin_ip: str
     destination_ip: str 
-    message_type: str = 'to_client'
     time: str
     request_body: Type[BaseBody]

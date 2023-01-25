@@ -5,8 +5,7 @@ class Connection:
         self.hostname = hostname
 
     def __str__(self):
-        return f"""
-        IP: {self.ip}
+        return f"""IP: {self.ip}
         HOSTNAME: {self.hostname}
         CONN: {self.conn}
                 """
@@ -14,3 +13,8 @@ class Connection:
 
 x = Connection('x', 'z', 'y')
 print(x)
+
+print(x.__str__())
+
+z = {'y':'z'}
+print(list(z.keys())[0])

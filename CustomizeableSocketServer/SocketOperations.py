@@ -2,7 +2,7 @@ import socket
 import json
 import datetime
 from typing import Type, IO, Any
-from schemas import BaseSchema, BaseBody, FileBody
+from schemas import BaseSchema, BaseBody, FileBody, CommandBody
 import base64 as b64
 
 
@@ -17,11 +17,7 @@ class Connection:
         self.hostname = hostname
 
     def __str__(self):
-        return f"""
-        IP: {self.ip}
-        HOSTNAME: {self.hostname}
-        CONN: {self.conn}
-                """
+        return f"IP: {self.ip}\nHOSTNAME: {self.hostname}\nCONN: {self.conn}"
 
 
 class BaseSocketOperator:
@@ -48,13 +44,17 @@ class BaseSocketOperator:
         with open(file_path, 'wb') as f:
             f.write(b64.b64decode(data))
 
-    def construct_message(self, origin_ip: str, destination_ip: str, message_type: str, request_body: Type[BaseBody]) -> Type[BaseSchema]:
+    def construct_message(self, origin_ip: str, destination_ip: str, request_body: Type[BaseBody]) -> Type[BaseSchema]:
         message = BaseSchema()
         message.origin_ip = origin_ip
         message.destination_ip = destination_ip
-        message.message_type = message_type
         message.request_body = request_body
         return message
+
+    def __process_command(self, command_body: CommandBody):
+        command = command_body.get('command')
+        kwargs = command_body.get('kwargs')
+        return command, kwargs
 
     def __calculate_data_length(self, data):
         num_fragments = int(len(data) / self.__buffer_size) # what about the edgecase where the data size is a multiple of the self size?
