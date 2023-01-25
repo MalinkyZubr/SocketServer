@@ -1,7 +1,7 @@
 import socket
 import json
 import datetime
-from typing import Type, IO
+from typing import Type, IO, Any
 from schemas import BaseSchema, BaseBody, FileBody
 import base64 as b64
 
@@ -40,13 +40,13 @@ class BaseSocketOperator:
     def __pack_data(self, data):
         return json.dumps(data).encode()
 
-    def __load_file(self, file_path: str) -> bytes:
+    def __upload_file(self, file_path: str) -> bytes:
         with open(file_path, 'rb') as f:
-            return base64.b64encode(f.read()).decode('utf-8')
+            return b64.b64encode(f.read()).decode('utf-8')
 
     def __download_file(self, data: bytes, file_path: str):
         with open(file_path, 'wb') as f:
-            f.write(base64.b64decode(data))
+            f.write(b64.b64decode(data))
 
     def construct_message(self, origin_ip: str, destination_ip: str, message_type: str, request_body: Type[BaseBody]) -> Type[BaseSchema]:
         message = BaseSchema()
@@ -84,7 +84,7 @@ class BaseSocketOperator:
         for fragment in data: 
             connection.conn.send(fragment)
 
-    def recv_all(self, connection: Connection):
+    def recv_all(self, connection: Connection) -> tuple[list, Any]:
         aggregate_data = []
         length = self.__buffer_size
         while length == self.__buffer_size:

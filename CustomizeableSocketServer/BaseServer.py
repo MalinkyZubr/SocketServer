@@ -11,7 +11,7 @@ import SocketOperations
 
 
 class BaseServer(BaseSocketOperator):
-    def __init__(self, ip: str=SocketOperations.LOCALHOST, port: int=8000, timeout: int=1000, buffer_size: int=4096, cert_dir=None, key_dir=None):
+    def __init__(self, ip: str='192.168.0.161', port: int=8000, timeout: int=1000, buffer_size: int=4096, cert_dir=None, key_dir=None):
         self.set_buffer_size(buffer_size)
         self.connections = []
         self.ip: str = ip
@@ -19,9 +19,8 @@ class BaseServer(BaseSocketOperator):
         self.hostname: str = socket.gethostbyaddr(ip)
         self.sel = selectors.DefaultSelector()
 
-        # SSL Setup
-        self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        self.context.load_cert_chain(certfile=cert_dir, keyfile=key_dir)
+        self.cert_dir = cert_dir
+        self.key_dir = key_dir
 
         # Socket Setup
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -38,26 +37,24 @@ class BaseServer(BaseSocketOperator):
 
     def process_requests(self, connection: Connection):
         try:
-            frag_data, agg_data = self.recv_all(connection.conn) # 
+            frag_data, agg_data = self.recv_all(connection) 
+            destination_ip = agg_data.get('destination_ip')
+            destination_connection: Connection = self.__find_connection(destination_ip)
+            self.__send_all(frag_data, destination_connection)
         except json.decoder.JSONDecodeError:
             self.sel.unregister(connection.conn)
             self.connections.remove(connection)
-
-        destination_ip = agg_data.get('destination_ip')
-        try:    
-            destination_connection: Connection = self.__find_connection(destination_ip)
-            self.__send_all(frag_data, destination_connection) # add function to return error to origin Connection
-        except Exception as e:
-            print("Destination address not found")
+            print("fucked")
         
     def accept_connection(self):
-        with self.context.wrap_socket(self.sock, server_side=True) as ssock:
-            conn, addr = ssock.accept()
+        conn, addr = self.sock.accept()
+        print("Connection Accepted")
+        conn = ssl.wrap_socket(conn, ssl_version=ssl.PROTOCOL_SSLv23, server_side=True, certfile=self.cert_dir, keyfile=self.key_dir)
         conn.setblocking(False)
-
-        connection = Connection(ip=addr[0], conn=conn, hostname=socket.gethostbyaddr(addr[0]))
+        connection = Connection(addr[0], conn, hostname=socket.gethostbyaddr(addr[0]))
         self.connections.append(connection)
-        self.sel.register(conn, selectors.EVENT_READ, lambda: self.process_requests(connection=Connection))
+        self.sel.register(conn, selectors.EVENT_READ, lambda: self.process_requests(connection=connection))
+        print("Connection Started")
 
     def start(self):
         self.sel.register(self.sock, selectors.EVENT_READ, self.accept_connection)
