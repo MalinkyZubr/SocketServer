@@ -44,6 +44,8 @@ class BaseSocketOperator:
         with open(file_path, 'wb') as f:
             f.write(b64.b64decode(data))
 
+    def construct_body
+
     def construct_message(self, origin_ip: str, destination_ip: str, request_body: Type[BaseBody]) -> Type[BaseSchema]:
         message = BaseSchema()
         message.origin_ip = origin_ip
