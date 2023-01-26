@@ -9,6 +9,8 @@ import ssl
 from SocketOperations import BaseSocketOperator, Connection
 from schemas import SchemaProducer
 import SocketOperations
+import getpass
+import hashlib
 
 
 class BaseServer(BaseSocketOperator, SchemaProducer):
@@ -19,6 +21,8 @@ class BaseServer(BaseSocketOperator, SchemaProducer):
         self.port: int = port
         self.hostname: str = socket.gethostbyaddr(ip)
         self.sel = selectors.DefaultSelector()
+
+        self.password = ""
 
         self.commands = {"get_clients":self.__get_clients} + external_commands
 
@@ -71,6 +75,19 @@ class BaseServer(BaseSocketOperator, SchemaProducer):
         self.connections.append(connection)
         self.sel.register(conn, selectors.EVENT_READ, lambda: self.process_requests(connection=connection))
         print("Connection Started")
+
+    def __hash(self, password):
+        return hashlib.sha256(password.encode()).hexdigest()
+
+    def __
+
+    def __initialize_password(self):
+        while True:
+            password = getpass.getpass(prompt="Enter the server password: ")
+            if len(password) < 10:
+                print("\nPassword length is too low, must be at least 10 characters!\n")
+                continue
+            self.password = self.__hash(password)
 
     def start(self):
         self.sel.register(self.sock, selectors.EVENT_READ, self.accept_connection)

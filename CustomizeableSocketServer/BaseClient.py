@@ -10,7 +10,7 @@ import ssl
 from schemas import SchemaProducer
 from SocketOperations import BaseSocketOperator, Connection
 import SocketOperations
-import certifi
+import getpass
 
 
 class BaseClient(BaseSocketOperator, SchemaProducer):
@@ -23,7 +23,9 @@ class BaseClient(BaseSocketOperator, SchemaProducer):
         self.sock = ssl.wrap_socket(self.sock, ssl_version=ssl.PROTOCOL_SSLv23)
 
         self.connection = Connection(ip, self.sock, socket.gethostbyaddr(ip))
-    
+
+class AdminClient(BaseClient):
+    def submit_password
 
     
     
