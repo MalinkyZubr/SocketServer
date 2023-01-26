@@ -80,8 +80,8 @@ class BaseServer(BaseSocketOperator):
                 send_data = frag_data
                 forward_destination: ServerSideConnection = self.__find_connection(destination_ip)
         except json.decoder.JSONDecodeError:
-            self.sel.unregister(connection.conn)
-            self.connections.remove(connection)
+            self.sel.unregister(source_connection.conn)
+            self.connections.remove(source_connection)
             print("connection_failure")
         except Exception as error:
             send_data = self.construct_base_body(self.ip, forward_destination, error)

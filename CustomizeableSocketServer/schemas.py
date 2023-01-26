@@ -5,7 +5,7 @@ from typing import Optional, Union, IO, Type
 from pydantic import BaseModel
 import logging
 import time
-from SocketOperations import BaseSocketOperator
+from SocketOperations import BaseSocketOperator, FileHandler
 
 
 class BaseBody(BaseModel):
@@ -32,10 +32,10 @@ class BaseSchema(BaseModel):
     destination_ip: str 
     message_type: str
     time: str
-    request_body: Type[BaseBody]
+    request_body: Type[BaseBody]    
 
 
-class SchemaProducer(BaseSocketOperator):
+class SchemaProducer(FileHandler):
     def __construct_message(self, origin_ip: str, destination_ip: str, request_body: Type[BaseBody], message_type: str, schema: Type[BaseSchema]=BaseSchema()) -> Type[BaseSchema]:
         schema.origin_ip = origin_ip
         schema.destination_ip = destination_ip
@@ -71,7 +71,3 @@ class SchemaProducer(BaseSocketOperator):
         body.password = password
         message = self.__construct_message(origin_ip, destination_ip, body, "authentication")
         return self.__prepare_all(message)
-
-    
-
-    
