@@ -18,3 +18,10 @@ print(x.__str__())
 
 z = {'y':'z'}
 print(list(z.keys())[0])
+
+
+def change_feature(x):
+    x.conn = "Hehehe"
+
+change_feature(x)
+print(x)

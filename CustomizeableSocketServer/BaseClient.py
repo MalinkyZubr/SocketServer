@@ -13,7 +13,7 @@ import SocketOperations
 import getpass
 
 
-class BaseClient(BaseSocketOperator, SchemaProducer):
+class BaseClient(BaseSocketOperator):
     def __init__(self, ip: str='192.168.0.161', port: int=8000, buffer_size: int=4096):
         self.set_buffer_size(buffer_size)
 
@@ -22,10 +22,11 @@ class BaseClient(BaseSocketOperator, SchemaProducer):
 
         self.sock = ssl.wrap_socket(self.sock, ssl_version=ssl.PROTOCOL_SSLv23)
 
-        self.connection = Connection(ip, self.sock, socket.gethostbyaddr(ip))
+        self.connection = self.create_connection(socket.gethostbyaddr(ip), ip, self.sock)
 
 class AdminClient(BaseClient):
-    def submit_password
+    def submit_password():
+        pass
 
     
     

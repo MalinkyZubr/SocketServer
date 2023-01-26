@@ -2,25 +2,40 @@ import socket
 import json
 import datetime
 from typing import Type, IO, Any
-from schemas import BaseSchema, BaseBody, FileBody, CommandBody
+from schemas import BaseSchema, BaseBody, FileBody, CommandBody, SchemaProducer
 import base64 as b64
 
 
 DEFAULT_ROUTE: str = "0.0.0.0"
 LOCALHOST: str = "127.0.0.1"
 
-
-class Connection:
-    def __init__(self, ip: str, conn: IO, hostname: str):
-        self.ip = ip
-        self.conn = conn
-        self.hostname = hostname
-
-    def __str__(self):
-        return f"HOSTNAME: {self.hostname}\n\tIP: {self.ip}\n\tCONN: {self.conn}"
+TYPE_CLIENT = "client"
+TYPE_SERVER = "server"
 
 
-class BaseSocketOperator:
+class ClientSideConnection(BaseModel):
+    hostname: str
+    ip: str
+    conn: IO
+
+
+class ServerSideConnection(ClientSideConnection):
+    admin: bool = False
+
+
+class ConnectionProducer:
+    def create_connection(self, hostname: str, ip: str, conn: IO, type_set: str=TYPE_CLIENT) -> Type[ClientSideConnection]:
+        if type_set == TYPE_CLIENT:
+            connection = ClientSideConnection()
+        else: 
+            connection = ServerSideConnection()
+        connection.hostname = hostname
+        connection.ip = ip
+        connection.conn = conn
+        return connection
+
+
+class BaseSocketOperator(SchemaProducer, ConnectionProducer):
     def __init__(self):
         self.__buffer_size = 4096
 
@@ -43,11 +58,6 @@ class BaseSocketOperator:
     def __download_file(self, data: bytes, file_path: str):
         with open(file_path, 'wb') as f:
             f.write(b64.b64decode(data))
-
-    def __process_command(self, command_body: CommandBody) -> tuple[str, dict]:
-        command = command_body.get('command')
-        kwargs = command_body.get('kwargs')
-        return command, kwargs
 
     def __calculate_data_length(self, data: bytes) -> int:
         num_fragments = int(len(data) / self.__buffer_size) # what about the edgecase where the data size is a multiple of the self size?

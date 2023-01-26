@@ -6,14 +6,14 @@ import logging
 import time
 import sys
 import ssl
-from SocketOperations import BaseSocketOperator, Connection
-from schemas import SchemaProducer
+from SocketOperations import BaseSocketOperator, TYPE_SERVER, ServerSideConnection
+from schemas import BaseSchema, BaseBody, FileBody, CommandBody
 import SocketOperations
 import getpass
 import hashlib
 
 
-class BaseServer(BaseSocketOperator, SchemaProducer):
+class BaseServer(BaseSocketOperator):
     def __init__(self, external_commands: dict={}, ip: str='192.168.0.161', port: int=8000, timeout: int=1000, buffer_size: int=4096, cert_dir=None, key_dir=None):
         self.set_buffer_size(buffer_size)
         self.connections = []
@@ -24,7 +24,7 @@ class BaseServer(BaseSocketOperator, SchemaProducer):
 
         self.password = ""
 
-        self.commands = {"get_clients":self.__get_clients} + external_commands
+        self.commands = {"get_clients":self.__get_clients, 'shutdown':self.__shutdown} + external_commands
 
         self.cert_dir = cert_dir
         self.key_dir = key_dir
@@ -39,24 +39,40 @@ class BaseServer(BaseSocketOperator, SchemaProducer):
     def __get_clients(self, **kwargs):
         return [conn.__str__() for conn in self.connections]
 
-    def __find_connection(self, destination_ip: str) -> Connection | bool:
+    def __find_connection(self, destination_ip: str) -> ServerSideConnection | bool:
         for connection in self.connections:
             if connection.ip == destination_ip:
                 return connection
-            raise Exception("Connection not found")
+            raise "Connection Not Found"
 
-    def process_requests(self, source_connection: Connection):
+    def __check_admin(self, **kwargs):
+        if not kwargs['admin']:
+            raise "Not Authenticated: Need admin to execute this command"
+
+    def __shutdown(self, **kwargs):
+        self.__check_admin(**kwargs)
+        for connection in self.connections:
+            shutdown_message = self.construct_base_body(self.ip, connection.ip, "Shutting Down Server")
+            self.send_all(shutdown_message, connection)
+
+    def __process_command(self, command_body: CommandBody) -> tuple[str, dict]:
+        command = command_body.get('command')
+        kwargs = command_body.get('kwargs')
+        return command, kwargs
+
+    def process_requests(self, source_connection: ServerSideConnection):
         try:
             frag_data, agg_data = self.recv_all(source_connection) 
             destination_ip = agg_data.get('destination_ip')
             if destination_ip == self.ip: # if the command is designated for the server
-                forward_destination: Connection = source_connection
+                forward_destination: ServerSideConnection = source_connection
                 command, kwargs = self.__process_command(frag_data.get('request_body'))
+                kwargs['admin'] = source_connection.admin
                 result = self.commands.get(command)(**kwargs)
                 send_data = self.construct_base_body(self.ip, forward_destination, result)
             else: # if designated for another client
                 send_data = frag_data
-                forward_destination: Connection = self.__find_connection(destination_ip)
+                forward_destination: ServerSideConnection = self.__find_connection(destination_ip)
         except json.decoder.JSONDecodeError:
             self.sel.unregister(connection.conn)
             self.connections.remove(connection)
@@ -71,15 +87,19 @@ class BaseServer(BaseSocketOperator, SchemaProducer):
         print("Connection Accepted")
         conn = ssl.wrap_socket(conn, ssl_version=ssl.PROTOCOL_SSLv23, server_side=True, certfile=self.cert_dir, keyfile=self.key_dir)
         conn.setblocking(False)
-        connection = Connection(addr[0], conn, hostname=socket.gethostbyaddr(addr[0]))
+        connection = self.create_connection(socket.gethostbyaddr(addr[0]), addr[0], conn, type_set=TYPE_SERVER)
         self.connections.append(connection)
         self.sel.register(conn, selectors.EVENT_READ, lambda: self.process_requests(connection=connection))
         print("Connection Started")
 
-    def __hash(self, password):
+    def __hash(self, password: str) -> str:
         return hashlib.sha256(password.encode()).hexdigest()
 
-    def __
+    def __check_password(self, password: str, conn: ServerSideConnection) -> str:
+        if self.__hash(password) == self.password:
+            conn.admin = True
+            return "Password authentication successful. Priveleges upgraded" # make sure to add feature that specifies client class as admin
+        raise "Password authentication failure, incorrect password"
 
     def __initialize_password(self):
         while True:
