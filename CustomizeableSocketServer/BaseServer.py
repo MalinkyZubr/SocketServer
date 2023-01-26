@@ -60,16 +60,22 @@ class BaseServer(BaseSocketOperator):
         kwargs = command_body.get('kwargs')
         return command, kwargs
 
-    def process_requests(self, source_connection: ServerSideConnection):
+    def __process_requests(self, source_connection: ServerSideConnection):
         try:
             frag_data, agg_data = self.recv_all(source_connection) 
             destination_ip = agg_data.get('destination_ip')
-            if destination_ip == self.ip: # if the command is designated for the server
+            message_type = agg_data.get('message_type')
+            request_body = agg_data.get('request_body')
+            if message_type == "command": # if the command is designated for the server
                 forward_destination: ServerSideConnection = source_connection
-                command, kwargs = self.__process_command(frag_data.get('request_body'))
+                command, kwargs = self.__process_command(request_body)
                 kwargs['admin'] = source_connection.admin
                 result = self.commands.get(command)(**kwargs)
                 send_data = self.construct_base_body(self.ip, forward_destination, result)
+            elif message_type == "authentication":
+                password = request_body.get('password')
+                send_data = self.__check_password(password, source_connection)
+                forward_destination: ServerSideConnection = source_connection
             else: # if designated for another client
                 send_data = frag_data
                 forward_destination: ServerSideConnection = self.__find_connection(destination_ip)
@@ -89,7 +95,7 @@ class BaseServer(BaseSocketOperator):
         conn.setblocking(False)
         connection = self.create_connection(socket.gethostbyaddr(addr[0]), addr[0], conn, type_set=TYPE_SERVER)
         self.connections.append(connection)
-        self.sel.register(conn, selectors.EVENT_READ, lambda: self.process_requests(connection=connection))
+        self.sel.register(conn, selectors.EVENT_READ, lambda: self.__process_requests(connection=connection))
         print("Connection Started")
 
     def __hash(self, password: str) -> str:
@@ -98,7 +104,7 @@ class BaseServer(BaseSocketOperator):
     def __check_password(self, password: str, conn: ServerSideConnection) -> str:
         if self.__hash(password) == self.password:
             conn.admin = True
-            return "Password authentication successful. Priveleges upgraded" # make sure to add feature that specifies client class as admin
+            return "Password authentication successful. Priveleges upgraded" 
         raise "Password authentication failure, incorrect password"
 
     def __initialize_password(self):
@@ -110,6 +116,7 @@ class BaseServer(BaseSocketOperator):
             self.password = self.__hash(password)
 
     def start(self):
+        self.__initialize_password()
         self.sel.register(self.sock, selectors.EVENT_READ, self.accept_connection)
         print(f"[+] Starting TCP server on {self.ip}:{self.port}")
         while True:
