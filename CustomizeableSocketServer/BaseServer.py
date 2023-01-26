@@ -7,11 +7,11 @@ import time
 import sys
 import ssl
 from SocketOperations import BaseSocketOperator, Connection
-from schemas import BaseBody, BaseSchema
+from schemas import SchemaProducer
 import SocketOperations
 
 
-class BaseServer(BaseSocketOperator):
+class BaseServer(BaseSocketOperator, SchemaProducer):
     def __init__(self, external_commands: dict={}, ip: str='192.168.0.161', port: int=8000, timeout: int=1000, buffer_size: int=4096, cert_dir=None, key_dir=None):
         self.set_buffer_size(buffer_size)
         self.connections = []
@@ -41,27 +41,26 @@ class BaseServer(BaseSocketOperator):
                 return connection
             raise Exception("Connection not found")
 
-    def process_requests(self, connection: Connection):
+    def process_requests(self, source_connection: Connection):
         try:
-            frag_data, agg_data = self.recv_all(connection) 
+            frag_data, agg_data = self.recv_all(source_connection) 
             destination_ip = agg_data.get('destination_ip')
-            if destination_ip == self.ip:
+            if destination_ip == self.ip: # if the command is designated for the server
+                forward_destination: Connection = source_connection
                 command, kwargs = self.__process_command(frag_data.get('request_body'))
-                result = BaseBody(self.commands.get(command)(**kwargs))
-                message_destination: Connection = agg_data.get('origin_ip')
-                response = self.construct_message(self.ip, message_destination, result)
-                send_data = self.__prepare_all(response)
-            else:
+                result = self.commands.get(command)(**kwargs)
+                send_data = self.construct_base_body(self.ip, forward_destination, result)
+            else: # if designated for another client
                 send_data = frag_data
-                message_destination: Connection = self.__find_connection(destination_ip)
-            self.__send_all(send_data, message_destination)
+                forward_destination: Connection = self.__find_connection(destination_ip)
         except json.decoder.JSONDecodeError:
             self.sel.unregister(connection.conn)
             self.connections.remove(connection)
             print("connection_failure")
-        except Exception as e:
-            error_body = BaseBody(request_body=f"{e}")
-            message = self.construct_message(self.ip, frag_data.get('origin_ip'), error_body)
+        except Exception as error:
+            send_data = self.construct_base_body(self.ip, forward_destination, error)
+
+        self.send_all(send_data, forward_destination)
         
     def accept_connection(self):
         conn, addr = self.sock.accept()

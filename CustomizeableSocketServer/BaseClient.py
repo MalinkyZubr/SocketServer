@@ -7,13 +7,13 @@ import logging
 import time
 import sys
 import ssl
-from schemas import BaseSchema
+from schemas import SchemaProducer
 from SocketOperations import BaseSocketOperator, Connection
 import SocketOperations
 import certifi
 
 
-class BaseClient(BaseSocketOperator):
+class BaseClient(BaseSocketOperator, SchemaProducer):
     def __init__(self, ip: str='192.168.0.161', port: int=8000, buffer_size: int=4096):
         self.set_buffer_size(buffer_size)
 
@@ -23,10 +23,7 @@ class BaseClient(BaseSocketOperator):
         self.sock = ssl.wrap_socket(self.sock, ssl_version=ssl.PROTOCOL_SSLv23)
 
         self.connection = Connection(ip, self.sock, socket.gethostbyaddr(ip))
-
-    def send(self, package):
-        data: list = self.__prepare_all(package)
-        self.__send_all(data, self.connection)
+    
 
     
     

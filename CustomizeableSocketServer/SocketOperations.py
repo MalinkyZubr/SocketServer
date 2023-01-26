@@ -17,7 +17,7 @@ class Connection:
         self.hostname = hostname
 
     def __str__(self):
-        return f"IP: {self.ip}\nHOSTNAME: {self.hostname}\nCONN: {self.conn}"
+        return f"HOSTNAME: {self.hostname}\n\tIP: {self.ip}\n\tCONN: {self.conn}"
 
 
 class BaseSocketOperator:
@@ -27,13 +27,13 @@ class BaseSocketOperator:
     def set_buffer_size(self, __buffer_size):
         self.__buffer_size = __buffer_size
 
-    def get_buffer_size(self):
+    def get_buffer_size(self) -> int:
         return self.__buffer_size
     
-    def __unpack_data(self, data):
+    def __unpack_data(self, data: bytes) -> dict | list | str:
         return json.loads(data.decode())
 
-    def __pack_data(self, data):
+    def __pack_data(self, data: dict | list | str) -> bytes:
         return json.dumps(data).encode()
 
     def __upload_file(self, file_path: str) -> bytes:
@@ -44,21 +44,12 @@ class BaseSocketOperator:
         with open(file_path, 'wb') as f:
             f.write(b64.b64decode(data))
 
-    def construct_body
-
-    def construct_message(self, origin_ip: str, destination_ip: str, request_body: Type[BaseBody]) -> Type[BaseSchema]:
-        message = BaseSchema()
-        message.origin_ip = origin_ip
-        message.destination_ip = destination_ip
-        message.request_body = request_body
-        return message
-
-    def __process_command(self, command_body: CommandBody):
+    def __process_command(self, command_body: CommandBody) -> tuple[str, dict]:
         command = command_body.get('command')
         kwargs = command_body.get('kwargs')
         return command, kwargs
 
-    def __calculate_data_length(self, data):
+    def __calculate_data_length(self, data: bytes) -> int:
         num_fragments = int(len(data) / self.__buffer_size) # what about the edgecase where the data size is a multiple of the self size?
         return num_fragments
 
@@ -82,7 +73,7 @@ class BaseSocketOperator:
 
         return encoded_data_fragments
 
-    def __send_all(self, data: list, connection: Connection):
+    def send_all(self, data: list, connection: Connection):
         for fragment in data: 
             connection.conn.send(fragment)
 
