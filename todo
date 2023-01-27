@@ -1,5 +1,4 @@
-1. Add greater functionality to base client, give it default send and receive capabilities
-2. add OS based support
-3. ensure that library is modular enough to be modified for diverse use cases
-4. refactor existing code
-5. 
+1. add OS based support
+2. ensure that library is modular enough to be modified for diverse use cases
+3. refactor existing code
+4. 
