@@ -1,10 +1,11 @@
-import socket
 import json
 import datetime
 from typing import Type, IO, Any
-from schemas import BaseSchema, SchemaProducer
+from schemas import BaseSchema
 import base64 as b64
 from pydantic import BaseModel
+from schemas import BaseBody, BaseSchema, AuthenticationBody, CommandBody, FileBody
+from exceptions import PasswordLengthException
 
 
 DEFAULT_ROUTE: str = "0.0.0.0"
@@ -17,7 +18,7 @@ TYPE_SERVER = "server"
 class ClientSideConnection(BaseModel):
     hostname: str
     ip: str
-    conn: IO
+    conn: Any
 
 
 class ServerSideConnection(ClientSideConnection):
@@ -25,14 +26,11 @@ class ServerSideConnection(ClientSideConnection):
 
 
 class ConnectionConstructor:
-    def construct_connection(self, hostname: str, ip: str, conn: IO, type_set: str=TYPE_CLIENT) -> Type[ClientSideConnection]:
+    def construct_connection(self, hostname: str, ip: str, conn: Any, type_set: str=TYPE_CLIENT) -> Type[ClientSideConnection]:
         if type_set == TYPE_CLIENT:
-            connection = ClientSideConnection()
+            connection = ClientSideConnection(hostname=hostname, ip=ip, conn=conn, type_set=type_set)
         else: 
-            connection = ServerSideConnection()
-        connection.hostname = hostname
-        connection.ip = ip
-        connection.conn = conn
+            connection = ServerSideConnection(hostname=hostname, ip=ip, conn=conn, type_set=type_set)
         return connection
 
 
@@ -46,7 +44,46 @@ class FileHandler:
             f.write(b64.b64decode(data))
 
 
-class BaseSocketOperator(SchemaProducer, ConnectionConstructor, FileHandler):
+class SchemaProducer(FileHandler):
+    def __construct_message(self, origin_ip: str, destination_ip: str, request_body: Type[BaseBody], message_type: str, schema: Type[BaseSchema]) -> Type[BaseSchema]:
+        schema = schema()
+        schema.origin_ip = origin_ip
+        schema.destination_ip = destination_ip
+        schema.request_body = request_body
+        schema.message_type = message_type
+        return schema
+
+    def construct_base_body(self, origin_ip: str, destination_ip: str, content: dict | list | str) -> list:
+        body = BaseBody()
+        body.content = content
+        message = self.__construct_message(origin_ip, destination_ip, body, "standard")
+        return self.__prepare_all(message)
+
+    def construct_file_body(self, origin_ip: str, destination_ip: str, file_type: str, source_path: str, target_path: str, content: str="") -> list:
+        file_content = self.__upload_file(source_path)
+        body = FileBody()
+        body.file_type = file_type
+        body.target_path = target_path
+        body.file_content = file_content
+        body.content = content
+        message = self.__construct_message(origin_ip, destination_ip, body, "file")
+        return self.__prepare_all(message)
+
+    def construct_command_body(self, origin_ip: str, destination_ip: str, command: str, **kwargs: str) -> list:
+        body = CommandBody()
+        body.command = command
+        body.kwargs = kwargs
+        message = self.__construct_message(origin_ip, destination_ip, body, "command")
+        return self.__prepare_all(message)
+
+    def construct_authentication_body(self, origin_ip: str, destination_ip: str, password: str) -> list:
+        body = AuthenticationBody()
+        body.password = password
+        message = self.__construct_message(origin_ip, destination_ip, body, "authentication")
+        return self.__prepare_all(message)
+
+
+class BaseSocketOperator(SchemaProducer, ConnectionConstructor):
     def __init__(self):
         self.__buffer_size = 4096
 

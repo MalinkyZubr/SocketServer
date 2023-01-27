@@ -1,20 +1,32 @@
 import selectors
 import socket
 import json
-from typing import Optional, Union
 import logging
-import time
-import sys
 import ssl
-from SocketOperations import BaseSocketOperator, TYPE_SERVER, ServerSideConnection
-from schemas import BaseSchema, BaseBody, FileBody, CommandBody
-import SocketOperations
+from SocketOperations import BaseSocketOperator, TYPE_SERVER, ServerSideConnection, LOCALHOST
 import getpass
 import hashlib
+from exceptions import PasswordLengthException, AuthenticationFailure, ConnectionNotFoundError, InsufficientPriveleges
 
 
 class BaseServer(BaseSocketOperator):
-    def __init__(self, external_commands: dict={}, ip: str='192.168.0.161', port: int=8000, timeout: int=1000, buffer_size: int=4096, cert_dir=None, key_dir=None):
+    def __init__(self, cert_dir: str, key_dir: str, external_commands: dict={}, ip: str=LOCALHOST, port: int=8000, buffer_size: int=4096, log_dir: str | None=None):
+        if log_dir:
+            self.__logger = logging.getLogger(__name__)
+
+            c_handler = logging.StreamHandler()
+            c_handler.setLevel(logging.INFO)
+            f_handler = logging.FileHandler(log_dir)
+            f_handler.setLevel(logging.INFO)
+
+            c_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            c_handler.setFormatter(c_format)
+            f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            f_handler.setFormatter(f_format)
+
+            self.__logger.addHandler(c_handler)
+            self.__logger.addHandler(f_handler)
+
         self.set_buffer_size(buffer_size)
         self.connections = []
         self.ip: str = ip
@@ -24,14 +36,13 @@ class BaseServer(BaseSocketOperator):
 
         self.password = ""
 
-        self.commands = {"get_clients":self.__get_clients, 'shutdown':self.__shutdown} + external_commands
+        self.commands = {"get_clients":self.__get_clients, 'shutdown':self.__shutdown}.update(external_commands)
 
         self.cert_dir = cert_dir
         self.key_dir = key_dir
 
         # Socket Setup
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.settimeout(timeout)
         self.sock.setblocking(False)
         self.sock.bind((ip, port))
         self.sock.listen(10)
@@ -43,11 +54,11 @@ class BaseServer(BaseSocketOperator):
         for connection in self.connections:
             if connection.ip == destination_ip:
                 return connection
-            raise "Connection Not Found"
+            raise ConnectionNotFoundError()
 
     def __check_admin(self, **kwargs):
         if not kwargs['admin']:
-            raise "Not Authenticated: Need admin to execute this command"
+            raise InsufficientPriveleges()
 
     def __shutdown(self, **kwargs):
         self.__check_admin(**kwargs)
@@ -55,7 +66,7 @@ class BaseServer(BaseSocketOperator):
             shutdown_message = self.construct_base_body(self.ip, connection.ip, "Shutting Down Server")
             self.send_all(shutdown_message, connection)
 
-    def __process_command(self, command_body: CommandBody) -> tuple[str, dict]:
+    def __process_command(self, command_body: dict) -> tuple[str, dict]:
         command = command_body.get('command')
         kwargs = command_body.get('kwargs')
         return command, kwargs
@@ -79,24 +90,24 @@ class BaseServer(BaseSocketOperator):
             else: # if designated for another client
                 send_data = frag_data
                 forward_destination: ServerSideConnection = self.__find_connection(destination_ip)
+            self.send_all(send_data, forward_destination)
         except json.decoder.JSONDecodeError:
             self.sel.unregister(source_connection.conn)
             self.connections.remove(source_connection)
-            print("connection_failure")
+            self.__logger.error(f"Connection with {source_connection} lost")
         except Exception as error:
             send_data = self.construct_base_body(self.ip, forward_destination, error)
-
-        self.send_all(send_data, forward_destination)
+            self.send_all(send_data, forward_destination)
         
     def accept_connection(self):
         conn, addr = self.sock.accept()
-        print("Connection Accepted")
+        self.__logger.info(f'Connection request with {addr[0]} received')
         conn = ssl.wrap_socket(conn, ssl_version=ssl.PROTOCOL_SSLv23, server_side=True, certfile=self.cert_dir, keyfile=self.key_dir)
         conn.setblocking(False)
-        connection = self.create_connection(socket.gethostbyaddr(addr[0]), addr[0], conn, type_set=TYPE_SERVER)
+        connection = self.construct_connection(str(socket.gethostbyaddr(addr[0])), str(addr[0]), conn, type_set=TYPE_SERVER)
         self.connections.append(connection)
-        self.sel.register(conn, selectors.EVENT_READ, lambda: self.__process_requests(connection=connection))
-        print("Connection Started")
+        self.sel.register(conn, selectors.EVENT_READ, lambda: self.__process_requests(source_connection=connection))
+        self.__logger.info(f"Connection with {connection} established and stable!")
 
     def __hash(self, password: str) -> str:
         return hashlib.sha256(password.encode()).hexdigest()
@@ -105,20 +116,25 @@ class BaseServer(BaseSocketOperator):
         if self.__hash(password) == self.password:
             conn.admin = True
             return "Password authentication successful. Priveleges upgraded" 
-        raise "Password authentication failure, incorrect password"
+        raise AuthenticationFailure()
 
-    def __initialize_password(self):
-        while True:
-            password = getpass.getpass(prompt="Enter the server password: ")
-            if len(password) < 10:
-                print("\nPassword length is too low, must be at least 10 characters!\n")
-                continue
-            self.password = self.__hash(password)
+    def __initialize_password(self, password: str | None=None):
+        if not password:
+            while True:
+                password = getpass.getpass(prompt="Enter the server password: ")
+                if len(password) < 10:
+                    print("\nPassword length is too low, must be at least 10 characters!\n")
+                    continue
+                break
+        elif len(password) < 10:
+            raise PasswordLengthException()
+                
+        self.password = self.__hash(password)
 
     def start(self):
-        self.__initialize_password()
+        #self.__initialize_password()
         self.sel.register(self.sock, selectors.EVENT_READ, self.accept_connection)
-        print(f"[+] Starting TCP server on {self.ip}:{self.port}")
+        self.__logger.info(f"[+] Starting TCP server on {self.ip}:{self.port}")
         while True:
             events = self.sel.select()
             for key, mask in events:
