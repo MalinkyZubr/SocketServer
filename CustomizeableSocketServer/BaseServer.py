@@ -132,7 +132,7 @@ class BaseServer(BaseSocketOperator):
         self.password = self.__hash(password)
 
     def start(self):
-        #self.__initialize_password()
+        self.__initialize_password()
         self.sel.register(self.sock, selectors.EVENT_READ, self.accept_connection)
         self.__logger.info(f"[+] Starting TCP server on {self.ip}:{self.port}")
         while True:
