@@ -13,6 +13,7 @@ from BaseServer import BaseServer
 
 if __name__ == "__main__":
     server = BaseServer(
+                        port=12000,
                         cert_dir=r'C:\Users\ahuma\Desktop\certs\cert1.pem',
                         key_dir=r'C:\Users\ahuma\Desktop\certs\key1.pem'
                        )

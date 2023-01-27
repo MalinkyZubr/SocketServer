@@ -7,25 +7,25 @@ from SocketOperations import BaseSocketOperator, TYPE_SERVER, ServerSideConnecti
 import getpass
 import hashlib
 from exceptions import PasswordLengthException, AuthenticationFailure, ConnectionNotFoundError, InsufficientPriveleges
+logging.basicConfig(level=logging.INFO)
 
 
 class BaseServer(BaseSocketOperator):
     def __init__(self, cert_dir: str, key_dir: str, external_commands: dict={}, ip: str=LOCALHOST, port: int=8000, buffer_size: int=4096, log_dir: str | None=None):
+        self.logger = logging.getLogger("server")
+        c_handler = logging.StreamHandler()
+        c_handler.setLevel(logging.INFO)
+        c_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        c_handler.setFormatter(c_format)
+        self.logger.addHandler(c_handler)
         if log_dir:
-            self.__logger = logging.getLogger(__name__)
-
-            c_handler = logging.StreamHandler()
-            c_handler.setLevel(logging.INFO)
             f_handler = logging.FileHandler(log_dir)
             f_handler.setLevel(logging.INFO)
 
-            c_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-            c_handler.setFormatter(c_format)
             f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
             f_handler.setFormatter(f_format)
 
-            self.__logger.addHandler(c_handler)
-            self.__logger.addHandler(f_handler)
+            self.logger.addHandler(f_handler)
 
         self.set_buffer_size(buffer_size)
         self.connections = []
@@ -94,20 +94,20 @@ class BaseServer(BaseSocketOperator):
         except json.decoder.JSONDecodeError:
             self.sel.unregister(source_connection.conn)
             self.connections.remove(source_connection)
-            self.__logger.error(f"Connection with {source_connection} lost")
+            self.logger.error(f"Connection with {source_connection} lost")
         except Exception as error:
             send_data = self.construct_base_body(self.ip, forward_destination, error)
             self.send_all(send_data, forward_destination)
         
     def accept_connection(self):
         conn, addr = self.sock.accept()
-        self.__logger.info(f'Connection request with {addr[0]} received')
+        self.logger.info(f'Connection request with {addr[0]} received')
         conn = ssl.wrap_socket(conn, ssl_version=ssl.PROTOCOL_SSLv23, server_side=True, certfile=self.cert_dir, keyfile=self.key_dir)
         conn.setblocking(False)
         connection = self.construct_connection(str(socket.gethostbyaddr(addr[0])), str(addr[0]), conn, type_set=TYPE_SERVER)
         self.connections.append(connection)
         self.sel.register(conn, selectors.EVENT_READ, lambda: self.__process_requests(source_connection=connection))
-        self.__logger.info(f"Connection with {connection} established and stable!")
+        self.logger.info(f"Connection with {connection} established and stable!")
 
     def __hash(self, password: str) -> str:
         return hashlib.sha256(password.encode()).hexdigest()
@@ -134,7 +134,7 @@ class BaseServer(BaseSocketOperator):
     def start(self):
         self.__initialize_password()
         self.sel.register(self.sock, selectors.EVENT_READ, self.accept_connection)
-        self.__logger.info(f"[+] Starting TCP server on {self.ip}:{self.port}")
+        self.logger.info(f"[+] Starting TCP server on {self.ip}:{self.port}")
         while True:
             events = self.sel.select()
             for key, mask in events:

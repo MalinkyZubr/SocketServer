@@ -6,25 +6,25 @@ from SocketOperations import BaseSocketOperator
 import SocketOperations
 import selectors
 import logging
+logging.basicConfig(level=logging.INFO)
 
 
 class BaseClient(BaseSocketOperator):
     def __init__(self, ip: str=SocketOperations.LOCALHOST, port: int=8000, buffer_size: int=4096, log_dir: str | None=None):
+        self.logger = logging.getLogger("client")
+        c_handler = logging.StreamHandler()
+        c_handler.setLevel(logging.INFO)
+        c_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        c_handler.setFormatter(c_format)
+        self.logger.addHandler(c_handler)
         if log_dir:
-            self.__logger = logging.getLogger(__name__)
-
-            c_handler = logging.StreamHandler()
-            c_handler.setLevel(logging.INFO)
             f_handler = logging.FileHandler(log_dir)
             f_handler.setLevel(logging.INFO)
 
-            c_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-            c_handler.setFormatter(c_format)
             f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
             f_handler.setFormatter(f_format)
 
-            self.__logger.addHandler(c_handler)
-            self.__logger.addHandler(f_handler)
+            self.logger.addHandler(f_handler)
 
         self.set_buffer_size(buffer_size)
         self.received = []
