@@ -13,7 +13,7 @@ from BaseServer import BaseServer
 
 if __name__ == "__main__":
     server = BaseServer(
-                        cert_dir=r'C:\Users\ahuma\Desktop\certs\cert.pem',
-                        key_dir=r'C:\Users\ahuma\Desktop\certs\private.key'
+                        cert_dir=r'C:\Users\ahuma\Desktop\certs\cert1.pem',
+                        key_dir=r'C:\Users\ahuma\Desktop\certs\key1.pem'
                        )
     server.start()

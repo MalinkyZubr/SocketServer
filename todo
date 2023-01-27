@@ -1,3 +1,5 @@
-1. finish buffering system
-2. add encryption
-3.
+1. Add greater functionality to base client, give it default send and receive capabilities
+2. add OS based support
+3. ensure that library is modular enough to be modified for diverse use cases
+4. refactor existing code
+5. 

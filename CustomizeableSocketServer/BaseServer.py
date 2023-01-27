@@ -1,68 +1,140 @@
 import selectors
 import socket
 import json
-from typing import Optional, Union
-from pydantic import BaseModel
 import logging
-import time
-import sys
 import ssl
-from schemas import BaseSchema
-from buffer import buffer
-from Connection import Connection
+from SocketOperations import BaseSocketOperator, TYPE_SERVER, ServerSideConnection, LOCALHOST
+import getpass
+import hashlib
+from exceptions import PasswordLengthException, AuthenticationFailure, ConnectionNotFoundError, InsufficientPriveleges
 
 
-class BaseServer:
-    def __init__(self, ip='127.0.0.1', port=8000, encrypted=False, timeout=1000, schema=None, cert_dir=None, key_dir=None):
+class BaseServer(BaseSocketOperator):
+    def __init__(self, cert_dir: str, key_dir: str, external_commands: dict={}, ip: str=LOCALHOST, port: int=8000, buffer_size: int=4096, log_dir: str | None=None):
+        if log_dir:
+            self.__logger = logging.getLogger(__name__)
+
+            c_handler = logging.StreamHandler()
+            c_handler.setLevel(logging.INFO)
+            f_handler = logging.FileHandler(log_dir)
+            f_handler.setLevel(logging.INFO)
+
+            c_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            c_handler.setFormatter(c_format)
+            f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            f_handler.setFormatter(f_format)
+
+            self.__logger.addHandler(c_handler)
+            self.__logger.addHandler(f_handler)
+
+        self.set_buffer_size(buffer_size)
         self.connections = []
-        self.ip = ip
-        self.port = port
-        self.hostname = socket.gethostbyaddr(ip)
+        self.ip: str = ip
+        self.port: int = port
+        self.hostname: str = socket.gethostbyaddr(ip)
         self.sel = selectors.DefaultSelector()
 
-        # SSL Setup
-        self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        self.context.load_cert_chain(cert_dir, key_dir)
+        self.password = ""
+
+        self.commands = {"get_clients":self.__get_clients, 'shutdown':self.__shutdown}.update(external_commands)
+
+        self.cert_dir = cert_dir
+        self.key_dir = key_dir
 
         # Socket Setup
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.settimeout(timeout)
         self.sock.setblocking(False)
         self.sock.bind((ip, port))
         self.sock.listen(10)
 
-    def __find_connection(self, target_ip: str) -> Connection | bool:
+    def __get_clients(self, **kwargs):
+        return [conn.__str__() for conn in self.connections]
+
+    def __find_connection(self, destination_ip: str) -> ServerSideConnection | bool:
         for connection in self.connections:
-            if connection.ip == target_ip:
+            if connection.ip == destination_ip:
                 return connection
-            raise Exception("Connection not found")
+            raise ConnectionNotFoundError()
 
-    def process_requests(self, connection: Connection):
+    def __check_admin(self, **kwargs):
+        if not kwargs['admin']:
+            raise InsufficientPriveleges()
+
+    def __shutdown(self, **kwargs):
+        self.__check_admin(**kwargs)
+        for connection in self.connections:
+            shutdown_message = self.construct_base_body(self.ip, connection.ip, "Shutting Down Server")
+            self.send_all(shutdown_message, connection)
+
+    def __process_command(self, command_body: dict) -> tuple[str, dict]:
+        command = command_body.get('command')
+        kwargs = command_body.get('kwargs')
+        return command, kwargs
+
+    def __process_requests(self, source_connection: ServerSideConnection):
         try:
-            frag_data, agg_data = buffer.recv_all(connection.conn) # 
+            frag_data, agg_data = self.recv_all(source_connection) 
+            destination_ip = agg_data.get('destination_ip')
+            message_type = agg_data.get('message_type')
+            request_body = agg_data.get('request_body')
+            if message_type == "command": # if the command is designated for the server
+                forward_destination: ServerSideConnection = source_connection
+                command, kwargs = self.__process_command(request_body)
+                kwargs['admin'] = source_connection.admin
+                result = self.commands.get(command)(**kwargs)
+                send_data = self.construct_base_body(self.ip, forward_destination, result)
+            elif message_type == "authentication":
+                password = request_body.get('password')
+                send_data = self.__check_password(password, source_connection)
+                forward_destination: ServerSideConnection = source_connection
+            else: # if designated for another client
+                send_data = frag_data
+                forward_destination: ServerSideConnection = self.__find_connection(destination_ip)
+            self.send_all(send_data, forward_destination)
         except json.decoder.JSONDecodeError:
-            self.sel.unregister(connection.conn)
-            self.connections.remove(connection)
-
-        target_ip = agg_data.get('destination_ip')
-        try:    
-            target_connection: Connection = self.__find_connection(target_ip=target_ip)
-            buffer.send_all(frag_data, target_connection) # add function to return error to origin Connection
-        except Exception as e:
-            print("Destination address not found")
+            self.sel.unregister(source_connection.conn)
+            self.connections.remove(source_connection)
+            self.__logger.error(f"Connection with {source_connection} lost")
+        except Exception as error:
+            send_data = self.construct_base_body(self.ip, forward_destination, error)
+            self.send_all(send_data, forward_destination)
         
     def accept_connection(self):
-        with self.context.wrap_socket(self.sock, server_side=True) as ssock:
-            conn, addr = ssock.accept()
+        conn, addr = self.sock.accept()
+        self.__logger.info(f'Connection request with {addr[0]} received')
+        conn = ssl.wrap_socket(conn, ssl_version=ssl.PROTOCOL_SSLv23, server_side=True, certfile=self.cert_dir, keyfile=self.key_dir)
         conn.setblocking(False)
-
-        connection = Connection(ip=addr[0], conn=conn, hostname=socket.gethostbyaddr(addr[0]))
+        connection = self.construct_connection(str(socket.gethostbyaddr(addr[0])), str(addr[0]), conn, type_set=TYPE_SERVER)
         self.connections.append(connection)
-        self.sel.register(conn, selectors.EVENT_READ, lambda: self.process_requests(connection=Connection))
+        self.sel.register(conn, selectors.EVENT_READ, lambda: self.__process_requests(source_connection=connection))
+        self.__logger.info(f"Connection with {connection} established and stable!")
+
+    def __hash(self, password: str) -> str:
+        return hashlib.sha256(password.encode()).hexdigest()
+
+    def __check_password(self, password: str, conn: ServerSideConnection) -> str:
+        if self.__hash(password) == self.password:
+            conn.admin = True
+            return "Password authentication successful. Priveleges upgraded" 
+        raise AuthenticationFailure()
+
+    def __initialize_password(self, password: str | None=None):
+        if not password:
+            while True:
+                password = getpass.getpass(prompt="Enter the server password: ")
+                if len(password) < 10:
+                    print("\nPassword length is too low, must be at least 10 characters!\n")
+                    continue
+                break
+        elif len(password) < 10:
+            raise PasswordLengthException()
+                
+        self.password = self.__hash(password)
 
     def start(self):
+        #self.__initialize_password()
         self.sel.register(self.sock, selectors.EVENT_READ, self.accept_connection)
-        print(f"[+] Starting TCP server on {self.ip}:{self.port}")
+        self.__logger.info(f"[+] Starting TCP server on {self.ip}:{self.port}")
         while True:
             events = self.sel.select()
             for key, mask in events:
