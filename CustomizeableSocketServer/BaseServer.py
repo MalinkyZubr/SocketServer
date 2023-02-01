@@ -3,7 +3,7 @@ import socket
 import json
 import logging
 import ssl
-from SocketOperations import BaseSocketOperator, TYPE_SERVER, ServerSideConnection, LOCALHOST
+from SocketOperations import BaseSocketOperator, TYPE_SERVER, ServerSideConnection, LOCALHOST, BaseSchema
 import getpass
 import hashlib
 from exceptions import PasswordLengthException, AuthenticationFailure, ConnectionNotFoundError, InsufficientPriveleges
@@ -31,6 +31,7 @@ class BaseServer(BaseSocketOperator):
         self.connections = []
         self.ip: str = ip
         self.port: int = port
+        self.set_my_ip(ip)
         self.hostname: str = socket.gethostbyaddr(ip)
         self.sel = selectors.DefaultSelector()
 
@@ -73,7 +74,8 @@ class BaseServer(BaseSocketOperator):
 
     def __process_requests(self, source_connection: ServerSideConnection):
         try:
-            frag_data, agg_data = self.recv_all(source_connection) 
+            agg_data = self.recv_all(source_connection) 
+            print(agg_data)
             destination_ip = agg_data.get('destination_ip')
             message_type = agg_data.get('message_type')
             request_body = agg_data.get('request_body')
@@ -88,7 +90,7 @@ class BaseServer(BaseSocketOperator):
                 send_data = self.__check_password(password, source_connection)
                 forward_destination: ServerSideConnection = source_connection
             else: # if designated for another client
-                send_data = frag_data
+                send_data = BaseSchema(**agg_data)
                 forward_destination: ServerSideConnection = self.__find_connection(destination_ip)
             self.send_all(send_data, forward_destination)
         except json.decoder.JSONDecodeError:
@@ -96,7 +98,8 @@ class BaseServer(BaseSocketOperator):
             self.connections.remove(source_connection)
             self.logger.error(f"Connection with {source_connection} lost")
         except Exception as error:
-            send_data = self.construct_base_body(self.ip, forward_destination, error)
+            print(forward_destination)
+            send_data = self.construct_base_body(forward_destination, str(error))
             self.send_all(send_data, forward_destination)
         
     def accept_connection(self):
