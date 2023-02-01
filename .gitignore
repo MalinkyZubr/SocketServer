@@ -5,6 +5,7 @@ tests
 *.egg-info
 certs
 .dist
-dist
+.dist
+*.dist
 *.dist
 CustomizeableSocketServer.egg-info
