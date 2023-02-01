@@ -1,4 +1,4 @@
-from typing import Type, Any
+from typing import Type
 from pydantic import BaseModel
 
 
@@ -26,5 +26,5 @@ class BaseSchema(BaseModel):
     destination_ip: str 
     message_type: str
     time: str
-    request_body: Any
+    request_body: Type[BaseBody]    
 
