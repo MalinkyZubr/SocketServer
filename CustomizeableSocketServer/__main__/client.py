@@ -13,3 +13,4 @@ from BaseClient import BaseClient
 
 if __name__ == "__main__":
     client = BaseClient(port=12000)
+    client.start_client_runtime()
