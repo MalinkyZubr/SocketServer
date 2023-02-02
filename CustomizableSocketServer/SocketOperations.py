@@ -1,11 +1,9 @@
 import json
 import datetime
 from typing import Type, Any
-from schemas import BaseSchema
 import base64 as b64
 from pydantic import BaseModel
-from schemas import BaseBody, BaseSchema, AuthenticationBody, CommandBody, FileBody
-import schemas
+from . import schemas
 
 
 DEFAULT_ROUTE: str = "0.0.0.0"
@@ -65,7 +63,7 @@ class BaseSocketOperator(ConnectionConstructor, FileHandler):
         num_fragments = int(len(data) / self.__buffer_size) + 1# what about the edgecase where the data size is a multiple of the self size?
         return num_fragments
 
-    def __prepare_all(self, package: Type[BaseSchema]) -> list:
+    def __prepare_all(self, package: Type[schemas.BaseSchema]) -> list:
         package = package.dict()
 
         encoded_data = self.__pack_data(package)
@@ -84,7 +82,7 @@ class BaseSocketOperator(ConnectionConstructor, FileHandler):
 
         return encoded_data_fragments
 
-    def send_all(self, data: Type[BaseSchema], connection: Type[ClientSideConnection]):
+    def send_all(self, data: Type[schemas.BaseSchema], connection: Type[ClientSideConnection]):
         data = self.__prepare_all(data)
         for fragment in data: 
             connection.conn.send(fragment)
@@ -107,8 +105,8 @@ class BaseSocketOperator(ConnectionConstructor, FileHandler):
     def my_ip(self):
         return BaseSocketOperator.__my_ip
 
-    def __construct_message(self, destination_ip: str, request_body: Type[BaseBody], message_type: str) -> Type[BaseSchema]:
-        schema = BaseSchema(origin_ip=self.my_ip(), 
+    def __construct_message(self, destination_ip: str, request_body: Type[schemas.BaseBody], message_type: str) -> Type[schemas.BaseSchema]:
+        schema = schemas.BaseSchema(origin_ip=self.my_ip(), 
                             destination_ip=destination_ip, 
                             request_body=request_body, 
                             message_type=message_type,
@@ -116,13 +114,13 @@ class BaseSocketOperator(ConnectionConstructor, FileHandler):
         return schema
 
     def construct_base_body(self, destination_ip: str, content: dict | list | str) -> list:
-        body = BaseBody(content=content)
+        body = schemas.BaseBody(content=content)
         message = self.__construct_message(destination_ip, body, "standard")
         return message
 
     def construct_file_body(self, destination_ip: str, file_type: str, source_path: str, target_path: str, content: str="") -> list:
         file_content = self.__upload_file(source_path)
-        body = FileBody(file_type=file_type, 
+        body = schemas.FileBody(file_type=file_type, 
                         target_path=target_path,
                         file_content=file_content,
                         content=content)
@@ -130,12 +128,12 @@ class BaseSocketOperator(ConnectionConstructor, FileHandler):
         return message
 
     def construct_command_body(self, destination_ip: str, command: str, **kwargs: str) -> list:
-        body = CommandBody(command=command,
+        body = schemas.CommandBody(command=command,
                            kwargs=kwargs)
         message = self.__construct_message(destination_ip, body, "command")
         return message
 
     def construct_authentication_body(self, destination_ip: str, password: str) -> list:
-        body = AuthenticationBody(password=password)
+        body = schemas.AuthenticationBody(password=password)
         message = self.__construct_message(destination_ip, body, "authentication")
         return message

@@ -1,18 +1,17 @@
 import selectors
 import socket
-from typing import Optional, Union, IO, Type
+from typing import IO, Type
 import ssl
-from SocketOperations import BaseSocketOperator
-import SocketOperations
+from . import SocketOperations
+from . import schemas
 import selectors
 import logging
-from schemas import BaseSchema
 import os
 import threading
 logging.basicConfig(level=logging.INFO)
 
 
-class BaseClient(BaseSocketOperator):
+class BaseClient(SocketOperations.BaseSocketOperator):
     def __init__(self, ip: str=SocketOperations.LOCALHOST, port: int=8000, buffer_size: int=4096, log_dir: str | None=None):
         self.logger = logging.getLogger("client")
         c_handler = logging.StreamHandler()
@@ -56,7 +55,7 @@ class BaseClient(BaseSocketOperator):
         self.received.append(agg_data)
         print(f'{agg_data}\n')
 
-    def client_send(self, data: Type[BaseSchema]):
+    def client_send(self, data: Type[schemas.BaseSchema]):
         self.send_all(data, self.connection)
 
     def command_line_input(self):
