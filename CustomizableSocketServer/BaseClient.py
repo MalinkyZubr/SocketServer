@@ -1,15 +1,17 @@
 import selectors
 import socket
-from typing import Optional, Union, IO
+from typing import IO, Type
 import ssl
-from SocketOperations import BaseSocketOperator
-import SocketOperations
+from . import SocketOperations
+from . import schemas
 import selectors
 import logging
+import os
+import threading
 logging.basicConfig(level=logging.INFO)
 
 
-class BaseClient(BaseSocketOperator):
+class BaseClient(SocketOperations.BaseSocketOperator):
     def __init__(self, ip: str=SocketOperations.LOCALHOST, port: int=8000, buffer_size: int=4096, log_dir: str | None=None):
         self.logger = logging.getLogger("client")
         c_handler = logging.StreamHandler()
@@ -30,14 +32,12 @@ class BaseClient(BaseSocketOperator):
         self.received = []
         self.connection = None
         my_hostname = socket.gethostname()
-        self.my_ip = socket.gethostbyname(my_hostname)
+        self.set_my_ip(socket.gethostbyname(my_hostname))
         
         self.ip = ip
         self.port = port
         self.sock: IO = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sel = selectors.DefaultSelector()
-
-        self.connect_to_server(self.ip, self.port)
 
     def connect_to_server(self, ip, port):
         self.sock.connect((ip, port))
@@ -51,17 +51,35 @@ class BaseClient(BaseSocketOperator):
                 callback()
 
     def receive_messages(self):
-        frag_data, agg_data = self.recv_all(self.connection)
+        agg_data = self.recv_all(self.connection)
         self.received.append(agg_data)
-        print(agg_data)
-        
+        print(f'{agg_data}\n')
+
+    def client_send(self, data: Type[schemas.BaseSchema]):
+        self.send_all(data, self.connection)
+
+    def command_line_input(self):
+        while True:
+            try:
+                command = input("\n> ")
+                message = self.construct_base_body(self.ip, command)
+                self.client_send(message)
+            except (EOFError, KeyboardInterrupt):
+                self.sel.unregister(self.connection.conn)
+                self.connection.conn.close()
+                os._exit(0)
+                
+    def start_client_runtime(self):
+        input_thread = threading.Thread(target=self.command_line_input)
+        input_thread.start()
+        self.connect_to_server(self.ip, self.port)
+    
 
 class AdminClient(BaseClient):
     def submit_password(self, password):
         auth_message = self.construct_authentication_body(self.my_ip, self.ip, password)
-        self.send_all(auth_message, self.connection)
+        self.client_send(auth_message)
 
-    
 
     
     
