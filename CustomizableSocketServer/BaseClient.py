@@ -2,17 +2,24 @@ import selectors
 import socket
 from typing import IO, Type
 import ssl
-from . import SocketOperations
-from . import schemas
 import selectors
 import logging
 import os
 import threading
+from typing import Optional
+if __name__ != "__main__":
+    from . import SocketOperations as so
+    from . import exceptions as exc
+    from . import schemas
+else:
+    import SocketOperations as so
+    import exceptions as exc
+    import schemas
 logging.basicConfig(level=logging.INFO)
 
 
-class BaseClient(SocketOperations.BaseSocketOperator):
-    def __init__(self, ip: str=SocketOperations.LOCALHOST, port: int=8000, buffer_size: int=4096, log_dir: str | None=None):
+class BaseClient(so.BaseSocketOperator):
+    def __init__(self, ip: str=so.LOCALHOST, port: int=8000, buffer_size: int=4096, log_dir: Optional[str]=None):
         self.create_logger(log_dir=log_dir)
         self.set_type_client()
         self.set_buffer_size(buffer_size)
@@ -27,7 +34,7 @@ class BaseClient(SocketOperations.BaseSocketOperator):
         self.sel = selectors.DefaultSelector()
 
     def client_send_all(self, data: Type[schemas.BaseSchema]):
-        data = self.__prepare_all(data)
+        data = self.prepare_all(data)
         for fragment in data: 
             self.connection.conn.send(fragment)
 
@@ -46,30 +53,32 @@ class BaseClient(SocketOperations.BaseSocketOperator):
         agg_data = self.recv_all(self.connection)
         self.received.append(agg_data)
         print(f'{agg_data}\n')
-                
-    def start_client_runtime(self):
-        input_thread = threading.Thread(target=self.command_line_input)
-        input_thread.start()
-        self.connect_to_server(self.ip, self.port)
     
 
 class AdminClient(BaseClient):
-    def submit_password(self, password):
-        auth_message = self.construct_authentication_body(self.my_ip, self.ip, password)
+    def submit_password(self, password: str):
+        auth_message = self.construct_authentication_body(self.ip, password)
         self.client_send(auth_message)
 
 
 if __name__ == "__main__":
     client = BaseClient()
 
-    def command_line_input(self):
+    def command_line_input():
         while True:
             try:
                 command = input("\n> ")
-                message = self.construct_base_body(self.ip, command)
-                self.client_send_all(message)
-            except (EOFError, KeyboardInterrupt):
-                self.sel.unregister(self.connection.conn)
-                self.connection.conn.close()
+                message = client.construct_base_body(client.connection, command)
+                client.client_send_all(message)
+            except (EOFError, KeyboardInterrupt) as e:
+                print(e)
+                client.sel.unregister(client.connection.conn)
+                client.connection.conn.close()
                 os._exit(0)
-    client.start_client_runtime()
+
+    def start_client_runtime():
+        input_thread = threading.Thread(target=command_line_input)
+        input_thread.start()
+        client.connect_to_server()
+
+    start_client_runtime()

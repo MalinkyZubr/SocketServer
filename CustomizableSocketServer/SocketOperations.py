@@ -1,13 +1,16 @@
 import json
 import datetime
-from typing import Type, Any
+from typing import Type, Any, Optional
 import base64 as b64
 from pydantic import BaseModel
-from . import schemas
-from . import exceptions as exc
 import logging
 import socket
-
+if not __name__ != "__main__":
+    from . import schemas
+    from . import exceptions as exc
+else:
+    import schemas
+    import exceptions as exc
 
 DEFAULT_ROUTE: str = "0.0.0.0"
 LOCALHOST: str = "127.0.0.1"
@@ -34,7 +37,7 @@ class FileHandler:
 
 
 class Logger:
-    def create_logger(self, log_dir: str | None=None):
+    def create_logger(self, log_dir: Optional[str]=None):
         """
         creates the logger object
         """
@@ -58,23 +61,23 @@ class BaseSocketOperator(FileHandler, Logger):
     def __init__(self):
         self.__buffer_size = 4096
 
-    def set_buffer_size(self, __buffer_size):
+    def set_buffer_size(self, __buffer_size: int):
         self.__buffer_size = __buffer_size
 
     def get_buffer_size(self) -> int:
         return self.__buffer_size   
     
     def __unpack_data(self, data: bytes) -> dict | list | str:
-        return json.loads(data.decode())
+        return json.loads(b64.b64decode(data).decode())
 
     def __pack_data(self, data: dict | list | str) -> bytes:
-        return json.dumps(data).encode()
+        return b64.b64encode(json.dumps(data).encode())
 
     def __calculate_data_length(self, data: bytes) -> int:
         num_fragments = int(len(data) / self.__buffer_size) + 1# what about the edgecase where the data size is a multiple of the self size?
         return num_fragments
 
-    def __prepare_all(self, package: Type[schemas.BaseSchema]) -> list:
+    def prepare_all(self, package: Type[schemas.BaseSchema]) -> list:
         package = package.dict()
 
         encoded_data = self.__pack_data(package)
@@ -98,14 +101,14 @@ class BaseSocketOperator(FileHandler, Logger):
         length = self.__buffer_size
         while length == self.__buffer_size:
             loop_data = connection.conn.recv(self.__buffer_size)
-            if loop_data == 'end': # in case the message is an exact multiple of the buffer size
+            if self.__unpack_data(loop_data) == 'end': # in case the message is an exact multiple of the buffer size
                 break
             length = len(loop_data)
             aggregate_data.append(loop_data)
         
         return schemas.BaseSchema(**self.__unpack_data(b"".join(aggregate_data)))
 
-    def set_my_ip(self, my_ip):
+    def set_my_ip(self, my_ip: str):
         self.my_ip = my_ip
 
     def set_type_server(self):
@@ -165,7 +168,12 @@ class BaseSocketOperator(FileHandler, Logger):
         create a connection object to be used for connection operations
         """
         if self.type_set == "client":
-            connection = ClientSideConnection(hostname=socket.gethostbyaddr(ip), ip=ip, conn=conn)
+            connection = ClientSideConnection(hostname=str(socket.gethostbyaddr(ip)), ip=ip, conn=conn)
         else: 
-            connection = ServerSideConnection(hostname=socket.gethostbyaddr(ip), ip=ip, conn=conn)
+            connection = ServerSideConnection(hostname=str(socket.gethostbyaddr(ip)), ip=ip, conn=conn)
         return connection
+
+
+if __name__ == "__main__":
+    operator = BaseSocketOperator()
+    operator.construct_command_body

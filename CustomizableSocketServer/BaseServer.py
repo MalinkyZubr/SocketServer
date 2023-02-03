@@ -5,10 +5,15 @@ import logging
 import ssl
 import getpass
 import hashlib
-from typing import Type
-from . import SocketOperations as so
-from . import exceptions as exc
-from . import schemas
+from typing import Type, Optional
+if __name__ != "__main__":
+    from . import SocketOperations as so
+    from . import exceptions as exc
+    from . import schemas
+else:
+    import SocketOperations as so
+    import exceptions as exc
+    import schemas
 logging.basicConfig(level=logging.INFO)
 
 
@@ -16,7 +21,7 @@ class BaseServer(so.BaseSocketOperator):
     """
     Base server class.
     """
-    def __init__(self, cert_dir: str, key_dir: str, external_commands: dict={}, ip: str=so.LOCALHOST, port: int=8000, buffer_size: int=4096, log_dir: str | None=None):
+    def __init__(self, cert_dir: str, key_dir: str, external_commands: dict={}, ip: str=so.LOCALHOST, port: int=8000, buffer_size: int=4096, log_dir: Optional[str]=None):
         self.create_logger(log_dir=log_dir)
         self.set_type_server()
         self.set_buffer_size(buffer_size)
@@ -73,7 +78,7 @@ class BaseServer(so.BaseSocketOperator):
 
     def __server_send_all(self, data: Type[schemas.BaseSchema]):
         connection = self.__find_connection(data.destination_ip)
-        data = self.__prepare_all(data)
+        data = self.prepare_all(data)
         for fragment in data: 
             connection.conn.send(fragment)
 
@@ -91,18 +96,18 @@ class BaseServer(so.BaseSocketOperator):
                 send_data: schemas.BaseBody = self.__verify_credential(password, source_connection)
 
             send_data = agg_data
+            self.__server_send_all(send_data)
 
         except json.decoder.JSONDecodeError: # if connection was lost
+            print("FUCKED")
             self.sel.unregister(source_connection.conn)
             self.connections.remove(source_connection)
             self.logger.error(f"Connection with {source_connection} lost")
 
         except Exception as error:
             send_data = self.construct_base_body(connection=source_connection, content=str(error))
-
-        finally:
             self.__server_send_all(send_data)
-        
+
     def __accept_connection(self):
         conn, addr = self.sock.accept()
         self.logger.info(f'Connection request with {addr[0]} received')
@@ -158,7 +163,7 @@ class BaseServer(so.BaseSocketOperator):
 
 if __name__ == "__main__":
     server = BaseServer(
-        key_dir=r"C:\Users\ahuma\Desktop\certs\key1.pem",
-        cert_dir=r"C:\Users\ahuma\Desktop\certs\cert1.pem"
+        key_dir=r"C:\Users\ahuma\Desktop\certs\key.pem",
+        cert_dir=r"C:\Users\ahuma\Desktop\certs\cert.pem"
     )
     server.start()
