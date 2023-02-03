@@ -24,3 +24,9 @@ class InsufficientPriveleges(Exception):
         if not message:
             message = "Not Authenticated: Need admin to execute this command"
         super().__init__(message)
+
+class ImproperBufferSize(ValueError):
+    def __init__(self, message=None):
+        if not message:
+            message = "The buffersize must be 2 raised to any power"
+        super().__init__(message)

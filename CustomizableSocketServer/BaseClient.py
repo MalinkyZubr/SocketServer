@@ -13,21 +13,8 @@ logging.basicConfig(level=logging.INFO)
 
 class BaseClient(SocketOperations.BaseSocketOperator):
     def __init__(self, ip: str=SocketOperations.LOCALHOST, port: int=8000, buffer_size: int=4096, log_dir: str | None=None):
-        self.logger = logging.getLogger("client")
-        c_handler = logging.StreamHandler()
-        c_handler.setLevel(logging.INFO)
-        c_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        c_handler.setFormatter(c_format)
-        self.logger.addHandler(c_handler)
-        if log_dir:
-            f_handler = logging.FileHandler(log_dir)
-            f_handler.setLevel(logging.INFO)
-
-            f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-            f_handler.setFormatter(f_format)
-
-            self.logger.addHandler(f_handler)
-
+        self.create_logger(log_dir=log_dir)
+        self.set_type_client()
         self.set_buffer_size(buffer_size)
         self.received = []
         self.connection = None
@@ -39,10 +26,15 @@ class BaseClient(SocketOperations.BaseSocketOperator):
         self.sock: IO = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sel = selectors.DefaultSelector()
 
-    def connect_to_server(self, ip, port):
-        self.sock.connect((ip, port))
+    def client_send_all(self, data: Type[schemas.BaseSchema]):
+        data = self.__prepare_all(data)
+        for fragment in data: 
+            self.connection.conn.send(fragment)
+
+    def connect_to_server(self):
+        self.sock.connect((self.ip, self.port))
         self.sock = ssl.wrap_socket(self.sock, ssl_version=ssl.PROTOCOL_SSLv23)
-        self.connection = self.construct_connection(str(socket.gethostbyaddr(ip)), str(ip), self.sock)
+        self.connection = self.construct_connection(str(self.ip), self.sock)
         self.sel.register(self.connection.conn, selectors.EVENT_READ, self.receive_messages)
         while True:
             events = self.sel.select()
@@ -54,20 +46,6 @@ class BaseClient(SocketOperations.BaseSocketOperator):
         agg_data = self.recv_all(self.connection)
         self.received.append(agg_data)
         print(f'{agg_data}\n')
-
-    def client_send(self, data: Type[schemas.BaseSchema]):
-        self.send_all(data, self.connection)
-
-    def command_line_input(self):
-        while True:
-            try:
-                command = input("\n> ")
-                message = self.construct_base_body(self.ip, command)
-                self.client_send(message)
-            except (EOFError, KeyboardInterrupt):
-                self.sel.unregister(self.connection.conn)
-                self.connection.conn.close()
-                os._exit(0)
                 
     def start_client_runtime(self):
         input_thread = threading.Thread(target=self.command_line_input)
@@ -81,5 +59,17 @@ class AdminClient(BaseClient):
         self.client_send(auth_message)
 
 
-    
-    
+if __name__ == "__main__":
+    client = BaseClient()
+
+    def command_line_input(self):
+        while True:
+            try:
+                command = input("\n> ")
+                message = self.construct_base_body(self.ip, command)
+                self.client_send_all(message)
+            except (EOFError, KeyboardInterrupt):
+                self.sel.unregister(self.connection.conn)
+                self.connection.conn.close()
+                os._exit(0)
+    client.start_client_runtime()
