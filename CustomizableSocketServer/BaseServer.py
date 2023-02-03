@@ -5,6 +5,7 @@ import logging
 import ssl
 import getpass
 import hashlib
+from typing import Type
 from . import SocketOperations as so
 from . import exceptions as exc
 from . import schemas
@@ -12,22 +13,12 @@ logging.basicConfig(level=logging.INFO)
 
 
 class BaseServer(so.BaseSocketOperator):
+    """
+    Base server class.
+    """
     def __init__(self, cert_dir: str, key_dir: str, external_commands: dict={}, ip: str=so.LOCALHOST, port: int=8000, buffer_size: int=4096, log_dir: str | None=None):
-        self.logger = logging.getLogger("server")
-        c_handler = logging.StreamHandler()
-        c_handler.setLevel(logging.INFO)
-        c_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        c_handler.setFormatter(c_format)
-        self.logger.addHandler(c_handler)
-        if log_dir:
-            f_handler = logging.FileHandler(log_dir)
-            f_handler.setLevel(logging.INFO)
-
-            f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-            f_handler.setFormatter(f_format)
-
-            self.logger.addHandler(f_handler)
-
+        self.create_logger(log_dir=log_dir)
+        self.set_type_server()
         self.set_buffer_size(buffer_size)
         self.connections = []
         self.ip: str = ip
@@ -49,80 +40,90 @@ class BaseServer(so.BaseSocketOperator):
         self.sock.bind((ip, port))
         self.sock.listen(10)
 
-    def __get_clients(self, **kwargs):
+    def __get_clients(self, **kwargs: dict) -> list:
         return [conn.__str__() for conn in self.connections]
 
-    def __find_connection(self, destination_ip: str) -> so.ServerSideConnection | bool:
+    def __find_connection(self, destination_ip: str) -> so.ServerSideConnection:
         for connection in self.connections:
             if connection.ip == destination_ip:
                 return connection
             raise exc.ConnectionNotFoundError()
 
-    def __check_admin(self, **kwargs):
+    def __check_admin(self, **kwargs: dict) -> None:
         if not kwargs['admin']:
             raise exc.InsufficientPriveleges()
 
-    def __shutdown(self, **kwargs):
+    def __shutdown(self, **kwargs: dict) -> None:
         self.__check_admin(**kwargs)
         for connection in self.connections:
             shutdown_message = self.construct_base_body(self.ip, connection.ip, "Shutting Down Server")
             self.send_all(shutdown_message, connection)
 
-    def __process_command(self, command_body: dict) -> tuple[str, dict]:
-        command = command_body.get('command')
-        kwargs = command_body.get('kwargs')
+    def __process_command(self, command_body: schemas.CommandBody) -> tuple[str, dict]:
+        command = command_body.command
+        kwargs = command_body.kwargs
         return command, kwargs
 
-    def __process_requests(self, source_connection: so.ServerSideConnection):
+    def __command_executor(self, source_connection: so.ServerSideConnection, request_body: schemas.BaseBody) -> schemas.BaseBody:
+        command, kwargs = self.__process_command(request_body)
+        kwargs['admin'] = source_connection.admin
+        result = self.commands.get(command)(**kwargs)
+        send_data = self.construct_base_body(connection=source_connection, content=result)
+        return send_data
+
+    def __server_send_all(self, data: Type[schemas.BaseSchema]):
+        connection = self.__find_connection(data.destination_ip)
+        data = self.__prepare_all(data)
+        for fragment in data: 
+            connection.conn.send(fragment)
+
+    def __process_requests(self, source_connection: so.ServerSideConnection) -> None:
         try:
-            agg_data = self.recv_all(source_connection) 
-            print(agg_data)
-            destination_ip = agg_data.get('destination_ip')
-            message_type = agg_data.get('message_type')
-            request_body = agg_data.get('request_body')
+            agg_data: schemas.BaseSchema = self.recv_all(source_connection)
+            message_type: str = agg_data.message_type
+            request_body: Type[schemas.BaseBody] = agg_data.request_body
+
             if message_type == "command": # if the command is designated for the server
-                forward_destination: so.ServerSideConnection = source_connection
-                command, kwargs = self.__process_command(request_body)
-                kwargs['admin'] = source_connection.admin
-                result = self.commands.get(command)(**kwargs)
-                send_data = self.construct_base_body(self.ip, forward_destination, result)
+                send_data: schemas.BaseBody = self.__command_executor(source_connection, request_body)
+
             elif message_type == "authentication":
-                password = request_body.get('password')
-                send_data = self.__check_password(password, source_connection)
-                forward_destination: so.ServerSideConnection = source_connection
-            else: # if designated for another client
-                send_data = schemas.BaseSchema(**agg_data)
-                forward_destination: so.ServerSideConnection = self.__find_connection(destination_ip)
-            self.send_all(send_data, forward_destination)
-        except json.decoder.JSONDecodeError:
+                password: str = request_body.password
+                send_data: schemas.BaseBody = self.__verify_credential(password, source_connection)
+
+            send_data = agg_data
+
+        except json.decoder.JSONDecodeError: # if connection was lost
             self.sel.unregister(source_connection.conn)
             self.connections.remove(source_connection)
             self.logger.error(f"Connection with {source_connection} lost")
+
         except Exception as error:
-            print(forward_destination)
-            send_data = self.construct_base_body(forward_destination, str(error))
-            self.send_all(send_data, forward_destination)
+            send_data = self.construct_base_body(connection=source_connection, content=str(error))
+
+        finally:
+            self.__server_send_all(send_data)
         
-    def accept_connection(self):
+    def __accept_connection(self):
         conn, addr = self.sock.accept()
         self.logger.info(f'Connection request with {addr[0]} received')
         conn = ssl.wrap_socket(conn, ssl_version=ssl.PROTOCOL_SSLv23, server_side=True, certfile=self.cert_dir, keyfile=self.key_dir)
         conn.setblocking(False)
-        connection = self.construct_connection(str(socket.gethostbyaddr(addr[0])), str(addr[0]), conn, type_set=so.TYPE_SERVER)
+        connection = self.construct_connection(str(addr[0]), conn)
         self.connections.append(connection)
+
         self.sel.register(conn, selectors.EVENT_READ, lambda: self.__process_requests(source_connection=connection))
         self.logger.info(f"Connection with {connection} established and stable!")
 
     def __hash(self, password: str) -> str:
         return hashlib.sha256(password.encode()).hexdigest()
 
-    def __check_password(self, password: str, conn: so.ServerSideConnection) -> str:
+    def __verify_credential(self, password: str, conn: so.ServerSideConnection) -> str:
         if self.__hash(password) == self.password:
             conn.admin = True
             return "Password authentication successful. Priveleges upgraded" 
         raise exc.AuthenticationFailure()
 
-    def __initialize_password(self, password: str | None=None):
+    def __initialize_password(self, password: str | None=None) -> None:
         if not password:
             while True:
                 password = getpass.getpass(prompt="Enter the server password: ")
@@ -135,12 +136,12 @@ class BaseServer(so.BaseSocketOperator):
                 
         self.password = self.__hash(password)
 
-    """
-    Starts the server
-    """
     def start(self):
+        """
+        Starts the server
+        """
         self.__initialize_password()
-        self.sel.register(self.sock, selectors.EVENT_READ, self.accept_connection)
+        self.sel.register(self.sock, selectors.EVENT_READ, self.__accept_connection)
         self.logger.info(f"[+] Starting TCP server on {self.ip}:{self.port}")
         while True:
             events = self.sel.select()
@@ -153,3 +154,11 @@ class BaseServer(so.BaseSocketOperator):
         IP: {self.ip}
         PORT: {self.port}
         """
+
+
+if __name__ == "__main__":
+    server = BaseServer(
+        key_dir=r"C:\Users\ahuma\Desktop\certs\key1.pem",
+        cert_dir=r"C:\Users\ahuma\Desktop\certs\cert1.pem"
+    )
+    server.start()
