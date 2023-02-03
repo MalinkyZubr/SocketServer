@@ -53,11 +53,14 @@ class BaseClient(so.BaseSocketOperator):
         agg_data = self.recv_all(self.connection)
         self.received.append(agg_data)
         print(f'{agg_data}\n')
+
+    def get_connection(self) -> so.ClientSideConnection:
+        return self.connection
     
 
 class AdminClient(BaseClient):
     def submit_password(self, password: str):
-        auth_message = self.construct_authentication_body(self.ip, password)
+        auth_message = self.construct_authentication_body(password)
         self.client_send(auth_message)
 
 

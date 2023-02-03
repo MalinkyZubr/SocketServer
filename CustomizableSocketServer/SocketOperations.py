@@ -172,8 +172,3 @@ class BaseSocketOperator(FileHandler, Logger):
         else: 
             connection = ServerSideConnection(hostname=str(socket.gethostbyaddr(ip)), ip=ip, conn=conn)
         return connection
-
-
-if __name__ == "__main__":
-    operator = BaseSocketOperator()
-    operator.construct_command_body
