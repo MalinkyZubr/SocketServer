@@ -165,7 +165,7 @@ class BaseSocketOperator(FileHandler, Logger):
         create a connection object to be used for connection operations
         """
         if self.type_set == "client":
-            connection = ClientSideConnection(hostname=socket.gethostbyaddr(ip), ip=ip, conn=conn, type_set=type_set)
+            connection = ClientSideConnection(hostname=socket.gethostbyaddr(ip), ip=ip, conn=conn)
         else: 
-            connection = ServerSideConnection(hostname=socket.gethostbyaddr(ip), ip=ip, conn=conn, type_set=type_set)
+            connection = ServerSideConnection(hostname=socket.gethostbyaddr(ip), ip=ip, conn=conn)
         return connection
