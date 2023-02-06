@@ -1,14 +1,4 @@
 for all socket opts:
-Major redundancy screwup, why cant send all just get the destination out of the schema??? DONE
-
-make it so schemas can just receive a connection object and identify destination ip themselves DONE
-
-make self.my_ip instance variable DONE
-
-simplify server side request processing DONE
-
-make it so the connection constructor automatically knows if it is serving a client or server DONE
-
 FOr server:
 Consider creating a config class to store configuration settings and use it in __init__ instead of hardcoding them as function parameters.
 Use type hints in function signatures to improve code readability.
@@ -20,11 +10,6 @@ Use the if __name__ == '__main__' idiom to write a test script for the code.
 use more secure ssl encryption
 
 for client:
-Consider separating the connection and communication logic from the selector logic. You can have separate methods for establishing a connection, receiving and sending messages, and using selectors.
-
-
-Use context managers instead of manual resource management when opening files.
-
 Use the logging module's exception method to log any exceptions that might occur.
 
 Consider breaking down the connect_to_server method into smaller methods that can be easily unit tested.

@@ -23,8 +23,8 @@ class BaseClient(so.BaseSocketOperator):
         self.create_logger(log_dir=log_dir)
         self.set_type_client()
         self.set_buffer_size(buffer_size)
-        self.received = []
-        self.connection = None
+        self.__received = []
+        self.__connection = None
         my_hostname = socket.gethostname()
         self.set_my_ip(socket.gethostbyname(my_hostname))
         
@@ -33,29 +33,57 @@ class BaseClient(so.BaseSocketOperator):
         self.sock: IO = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sel = selectors.DefaultSelector()
 
+    def __receive_messages(self):
+        agg_data = self.recv_all(self.__connection)
+        self.__received.append(agg_data)
+
     def client_send_all(self, data: Type[schemas.BaseSchema]):
+        """
+        send a request to the established socket connection
+        """
         data = self.prepare_all(data)
         for fragment in data: 
-            self.connection.conn.send(fragment)
+            self.__connection.conn.send(fragment)
 
     def connect_to_server(self):
-        self.sock.connect((self.ip, self.port))
-        self.sock = ssl.wrap_socket(self.sock, ssl_version=ssl.PROTOCOL_SSLv23)
-        self.connection = self.construct_connection(str(self.ip), self.sock)
-        self.sel.register(self.connection.conn, selectors.EVENT_READ, self.receive_messages)
+        """
+        connect to the server and establish a selector to handle operations
+        """
+        try:
+            self.sock.connect((self.ip, self.port))
+            self.sock = ssl.wrap_socket(self.sock, ssl_version=ssl.PROTOCOL_SSLv23)
+            self.__connection = self.construct_connection(str(self.ip), self.sock)
+            self.sel.register(self.__connection.conn, selectors.EVENT_READ, self.__receive_messages)
+        except Exception as e:
+            self.logger.error(str(e))
         while True:
             events = self.sel.select()
             for key, mask in events:
                 callback = key.data
                 callback()
 
-    def receive_messages(self):
-        agg_data = self.recv_all(self.connection)
-        self.received.append(agg_data)
-        print(f'{agg_data}\n')
-
     def get_connection(self) -> so.ClientSideConnection:
-        return self.connection
+        """
+        return the connection to the server
+        """
+        return self.__connection
+    
+    def get_received(self) -> list[Type[schemas.BaseSchema]]:
+        """
+        return the list of messages received
+        """
+        return self.received
+        
+    def get_first_in_received(self) -> Type[schemas.BaseSchema]:
+        """
+        interprets the received messages list as a queue, and returns the first message in the list, before popping it from the list
+        """
+        try:
+            first_in_queue = self.received[0]
+            self.received.pop(0)
+            return first_in_queue
+        except IndexError:
+            return None
     
 
 class AdminClient(BaseClient):

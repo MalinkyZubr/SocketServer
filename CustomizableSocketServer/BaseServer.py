@@ -99,25 +99,28 @@ class BaseServer(so.BaseSocketOperator):
             self.__server_send_all(send_data)
 
         except json.decoder.JSONDecodeError: # if connection was lost
-            print("FUCKED")
             self.sel.unregister(source_connection.conn)
             self.connections.remove(source_connection)
             self.logger.error(f"Connection with {source_connection} lost")
 
         except Exception as error:
+            self.logger.error(str(error))
             send_data = self.construct_base_body(connection=source_connection, content=str(error))
             self.__server_send_all(send_data)
 
     def __accept_connection(self):
-        conn, addr = self.sock.accept()
-        self.logger.info(f'Connection request with {addr[0]} received')
-        conn = ssl.wrap_socket(conn, ssl_version=ssl.PROTOCOL_SSLv23, server_side=True, certfile=self.cert_dir, keyfile=self.key_dir)
-        conn.setblocking(False)
-        connection = self.construct_connection(str(addr[0]), conn)
-        self.connections.append(connection)
+        try:
+            conn, addr = self.sock.accept()
+            self.logger.info(f'Connection request with {addr[0]} received')
+            conn = ssl.wrap_socket(conn, ssl_version=ssl.PROTOCOL_SSLv23, server_side=True, certfile=self.cert_dir, keyfile=self.key_dir)
+            conn.setblocking(False)
+            connection = self.construct_connection(str(addr[0]), conn)
+            self.connections.append(connection)
 
-        self.sel.register(conn, selectors.EVENT_READ, lambda: self.__process_requests(source_connection=connection))
-        self.logger.info(f"Connection with {connection} established and stable!")
+            self.sel.register(conn, selectors.EVENT_READ, lambda: self.__process_requests(source_connection=connection))
+            self.logger.info(f"Connection with {connection} established and stable!")
+        except Exception as e:
+            self.logger.error(str(e))
 
     def __hash(self, password: str) -> str:
         return hashlib.sha256(password.encode()).hexdigest()
@@ -140,6 +143,12 @@ class BaseServer(so.BaseSocketOperator):
             raise exc.PasswordLengthException()
                 
         self.password = self.__hash(password)
+
+    def add_command(self, command: dict[str, function]):
+        """
+        accepts a command to add to the object command list. Must be in the format {"command_name":function}
+        """
+        self.commands.update(command)
 
     def start(self):
         """

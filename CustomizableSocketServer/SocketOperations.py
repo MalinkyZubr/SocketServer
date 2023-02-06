@@ -5,7 +5,7 @@ import base64 as b64
 from pydantic import BaseModel
 import logging
 import socket
-if not __name__ != "__main__":
+if __name__ != "__main__":
     from . import schemas
     from . import exceptions as exc
 else:
@@ -58,13 +58,19 @@ class Logger:
 
 
 class BaseSocketOperator(FileHandler, Logger):
-    def __init__(self):
-        self.__buffer_size = 4096
-
-    def set_buffer_size(self, __buffer_size: int):
-        self.__buffer_size = __buffer_size
+    def set_buffer_size(self, buffer_size: int):
+        """
+        set the size of the buffer
+        """
+        if (buffer_size & buffer_size-1)==0:
+            self.__buffer_size = buffer_size
+        else:
+            raise exc.ImproperBufferSize()
 
     def get_buffer_size(self) -> int:
+        """
+        get the size of the buffer
+        """
         return self.__buffer_size   
     
     def __unpack_data(self, data: bytes) -> dict | list | str:
@@ -78,6 +84,10 @@ class BaseSocketOperator(FileHandler, Logger):
         return num_fragments
 
     def prepare_all(self, package: Type[schemas.BaseSchema]) -> list:
+        """
+        take a message and encode it, then break it into its constituent parts in preparation to be send over a socket connection. 
+        Only use if you want to create your own custom sending methods for the client or server. Otherwise, this is already built in
+        """
         package = package.dict()
 
         encoded_data = self.__pack_data(package)
@@ -97,6 +107,9 @@ class BaseSocketOperator(FileHandler, Logger):
         return encoded_data_fragments
 
     def recv_all(self, connection: Type[ClientSideConnection]) -> tuple[list, Any]:
+        """
+        receive all incoming message fragments, re-assemble, and decode them to get the Schema object back.
+        """
         aggregate_data = []
         length = self.__buffer_size
         while length == self.__buffer_size:
@@ -109,12 +122,21 @@ class BaseSocketOperator(FileHandler, Logger):
         return schemas.BaseSchema(**self.__unpack_data(b"".join(aggregate_data)))
 
     def set_my_ip(self, my_ip: str):
+        """
+        set the IP of the client or server object
+        """
         self.my_ip = my_ip
 
     def set_type_server(self):
+        """
+        set the socket type to server. Only used once during instantiation to configure socket operations.
+        """
         self.type_set = "server"
 
     def set_type_client(self):
+        """
+        set the socket type to client. Only used once during instantiation to configure socket operations.
+        """
         self.type_set = "client"
 
     def __construct_message(self, connection: Type[ClientSideConnection], request_body: Type[schemas.BaseBody], message_type: str) -> Type[schemas.BaseSchema]:
