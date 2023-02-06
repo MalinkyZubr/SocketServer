@@ -185,7 +185,7 @@ class BaseSocketOperator(FileHandler, Logger):
         message = self.__construct_message(connection, body, "authentication")
         return message
 
-    def construct_connection(self, ip: str, conn: Any) -> Type[ClientSideConnection]:
+    def construct_connection(self, ip: str, conn: Any=None) -> Type[ClientSideConnection]:
         """
         create a connection object to be used for connection operations
         """

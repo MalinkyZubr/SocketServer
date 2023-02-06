@@ -1,3 +1,5 @@
+ADD CONNECTION TABLES FOR THE CLIENT TO IDENTIFY CONNECTIONS AND SEND DATA MORE EFFICIENTLY THROUGH THE SERVER. ADD A SYSTEM SO THAT THE SERVER WILL RETURN EXCEPTION TO CLIENT THAT TRIES TO SEND MESSAGE TO CLIENT THAT IS NO LONGER OR WAS NEVER CONNECTEd. OPTIMIZE THE CLIENT TABLES.
+
 for all socket opts:
 FOr server:
 Consider creating a config class to store configuration settings and use it in __init__ instead of hardcoding them as function parameters.

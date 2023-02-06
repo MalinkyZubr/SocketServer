@@ -24,7 +24,8 @@ class BaseClient(so.BaseSocketOperator):
         self.set_type_client()
         self.set_buffer_size(buffer_size)
         self.__received = []
-        self.__connection = None
+        self.__server_connection = None
+        self.__client_client_connections: list[so.ClientSideConnection]
         my_hostname = socket.gethostname()
         self.set_my_ip(socket.gethostbyname(my_hostname))
         
@@ -33,17 +34,23 @@ class BaseClient(so.BaseSocketOperator):
         self.sock: IO = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sel = selectors.DefaultSelector()
 
-    def __receive_messages(self):
-        agg_data = self.recv_all(self.__connection)
-        self.__received.append(agg_data)
+    def __check_connection_table(self, message: Type[schemas.BaseSchema]):
+        origin_connection = self.construct_connection(message.ip)
+        if origin_connection not in self.__client_client_connections:
+            self.__client_client_connections.append(origin_connection)
 
+    def __receive_messages(self):
+        agg_data = self.recv_all(self.__server_connection)
+        self.__received.append(agg_data)
+        self.__check_connection_table(agg_data)
+        
     def client_send_all(self, data: Type[schemas.BaseSchema]):
         """
         send a request to the established socket connection
         """
         data = self.prepare_all(data)
         for fragment in data: 
-            self.__connection.conn.send(fragment)
+            self.__server_connection.conn.send(fragment)
 
     def connect_to_server(self):
         """
@@ -52,8 +59,8 @@ class BaseClient(so.BaseSocketOperator):
         try:
             self.sock.connect((self.ip, self.port))
             self.sock = ssl.wrap_socket(self.sock, ssl_version=ssl.PROTOCOL_SSLv23)
-            self.__connection = self.construct_connection(str(self.ip), self.sock)
-            self.sel.register(self.__connection.conn, selectors.EVENT_READ, self.__receive_messages)
+            self.__server_connection = self.construct_connection(str(self.ip), self.sock)
+            self.sel.register(self.__server_connection.conn, selectors.EVENT_READ, self.__receive_messages)
         except Exception as e:
             self.logger.error(str(e))
         while True:
@@ -62,11 +69,11 @@ class BaseClient(so.BaseSocketOperator):
                 callback = key.data
                 callback()
 
-    def get_connection(self) -> so.ClientSideConnection:
+    def get_server_connection(self) -> so.ClientSideConnection:
         """
         return the connection to the server
         """
-        return self.__connection
+        return self.__server_connection
     
     def get_received(self) -> list[Type[schemas.BaseSchema]]:
         """
