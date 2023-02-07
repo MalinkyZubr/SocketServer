@@ -25,7 +25,6 @@ class BaseClient(so.BaseSocketOperator):
         self.set_buffer_size(buffer_size)
         self.__received = []
         self.__server_connection = None
-        self.__client_client_connections: list[so.ClientSideConnection]
         my_hostname = socket.gethostname()
         self.set_my_ip(socket.gethostbyname(my_hostname))
         
@@ -34,15 +33,9 @@ class BaseClient(so.BaseSocketOperator):
         self.sock: IO = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sel = selectors.DefaultSelector()
 
-    def __check_connection_table(self, message: Type[schemas.BaseSchema]):
-        origin_connection = self.construct_connection(message.ip)
-        if origin_connection not in self.__client_client_connections:
-            self.__client_client_connections.append(origin_connection)
-
     def __receive_messages(self):
         agg_data = self.recv_all(self.__server_connection)
         self.__received.append(agg_data)
-        self.__check_connection_table(agg_data)
         
     def client_send_all(self, data: Type[schemas.BaseSchema]):
         """
@@ -106,7 +99,7 @@ if __name__ == "__main__":
         while True:
             try:
                 command = input("\n> ")
-                message = client.construct_base_body(client.connection, command)
+                message = client.construct_base_body('127.0.0.1', command)
                 client.client_send_all(message)
             except (EOFError, KeyboardInterrupt) as e:
                 print(e)

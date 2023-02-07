@@ -139,15 +139,19 @@ class BaseSocketOperator(FileHandler, Logger):
         """
         self.type_set = "client"
 
-    def __construct_message(self, connection: Type[ClientSideConnection], request_body: Type[schemas.BaseBody], message_type: str) -> Type[schemas.BaseSchema]:
+    def __construct_message(self, connection: Type[ClientSideConnection] | str, request_body: Type[schemas.BaseBody], message_type: str) -> Type[schemas.BaseSchema]:
+        if isinstance(Type[ClientSideConnection], connection):
+            ip = connection.ip
+        else:
+            ip = connection
         schema = schemas.BaseSchema(origin_ip=self.my_ip, 
-                            destination_ip=connection.ip, 
+                            destination_ip=ip, 
                             request_body=request_body, 
                             message_type=message_type,
                             time=str(datetime.datetime.now().strftime("%H:%M:%S")))
         return schema
 
-    def construct_base_body(self, connection: Type[ClientSideConnection], content: dict | list | str) -> schemas.BaseBody:
+    def construct_base_body(self, connection: Type[ClientSideConnection] | str, content: dict | list | str) -> schemas.BaseBody:
         """
         construct a standard message to be forwarded to another client via the server
         """
@@ -155,7 +159,7 @@ class BaseSocketOperator(FileHandler, Logger):
         message = self.__construct_message(connection, body, "standard")
         return message
 
-    def construct_file_body(self, connection: Type[ClientSideConnection], file_type: str, source_path: str, target_path: str, content: str="") -> schemas.FileBody:
+    def construct_file_body(self, connection: Type[ClientSideConnection] | str, file_type: str, source_path: str, target_path: str, content: str="") -> schemas.FileBody:
         """
         construct a file transfer message to be forwarded to another client via the server
         """
@@ -167,7 +171,7 @@ class BaseSocketOperator(FileHandler, Logger):
         message = self.__construct_message(connection, body, "file")
         return message
 
-    def construct_command_body(self, connection: Type[ClientSideConnection], command: str, **kwargs: str) -> schemas.CommandBody:
+    def construct_command_body(self, connection: Type[ClientSideConnection] | str, command: str, **kwargs: str) -> schemas.CommandBody:
         """
         construct a command message to be issued directly to the server. The desired command must exist within
         the server's command dictionary, as is, or as added by the user
@@ -177,7 +181,7 @@ class BaseSocketOperator(FileHandler, Logger):
         message = self.__construct_message(connection, body, "command")
         return message
 
-    def construct_authentication_body(self, connection: Type[ClientSideConnection], password: str) -> schemas.AuthenticationBody:
+    def construct_authentication_body(self, connection: Type[ClientSideConnection] | str, password: str) -> schemas.AuthenticationBody:
         """
         construct an authentication body to submit password to gain admin permissions on the server
         """
