@@ -21,10 +21,7 @@ Don't use os._exit(). Instead, raise an exception that can be caught and handled
 You can also add comments to describe the logic of your code.
 
 for exceptions:
-Consider using a constant value instead of hard-coding the default message text in each __init__ method. This can make it easier to update the default message in the future.
-Consider adding descriptive error codes to each exception class to help identify the type of error that occurred.
 Consider adding optional parameters to the __init__ method to allow for more customized error messages.
-Consider using more specific exception classes for each error condition. For example, instead of using a general Exception class, consider using more specific exception classes like ValueError, AttributeError, etc.
 Consider documenting the purpose and usage of each exception class.
 
 for schemas:

@@ -5,7 +5,7 @@ import logging
 import ssl
 import getpass
 import hashlib
-from typing import Type, Optional
+from typing import Type, Optional, Callable
 if __name__ != "__main__":
     from . import SocketOperations as so
     from . import exceptions as exc
@@ -144,7 +144,7 @@ class BaseServer(so.BaseSocketOperator):
                 
         self.password = self.__hash(password)
 
-    def add_command(self, command: dict[str, function]):
+    def add_command(self, command: dict[str, Callable]):
         """
         accepts a command to add to the object command list. Must be in the format {"command_name":function}
         """
