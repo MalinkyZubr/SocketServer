@@ -1,14 +1,11 @@
-ADD CONNECTION TABLES FOR THE CLIENT TO IDENTIFY CONNECTIONS AND SEND DATA MORE EFFICIENTLY THROUGH THE SERVER. ADD A SYSTEM SO THAT THE SERVER WILL RETURN EXCEPTION TO CLIENT THAT TRIES TO SEND MESSAGE TO CLIENT THAT IS NO LONGER OR WAS NEVER CONNECTEd. OPTIMIZE THE CLIENT TABLES.
+too much schema bloat! simplify schema operations immediately!!!
+
+make it easier for users to send messages to either server or client
 
 for all socket opts:
+make a unified protocol to do ssl wrappings, so that there is not such a large amount of errors when improving SSL functionality.
 FOr server:
-Consider creating a config class to store configuration settings and use it in __init__ instead of hardcoding them as function parameters.
-Use type hints in function signatures to improve code readability.
-Use more descriptive variable names.
-Consider splitting the code into smaller functions to make it easier to maintain and test.
-When raising exceptions, use specific exceptions instead of a generic one like Exception.
 Use a more secure password hashing library like bcrypt instead of the simple hashlib.
-Use the if __name__ == '__main__' idiom to write a test script for the code.
 use more secure ssl encryption
 
 for client:
