@@ -88,10 +88,10 @@ class BaseServer(so.BaseSocketOperator):
             message_type: str = agg_data.message_type
             request_body: Type[schemas.BaseBody] = agg_data.request_body
 
-            if message_type == "command": # if the command is designated for the server
+            if message_type == "command" and agg_data.destination_ip == "server": # if the command is designated for the server
                 send_data: schemas.BaseBody = self.__command_executor(source_connection, request_body)
 
-            elif message_type == "authentication":
+            elif message_type == "authentication" and agg_data.destination_ip == "server":
                 password: str = request_body.password
                 send_data: schemas.BaseBody = self.__verify_credential(password, source_connection)
 

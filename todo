@@ -20,6 +20,10 @@ Don't use os._exit(). Instead, raise an exception that can be caught and handled
 
 You can also add comments to describe the logic of your code.
 
+add standardized commands for the client to make operations easier
+
+add a way to filter what is done with received messages based on their origin
+
 for exceptions:
 Consider adding optional parameters to the __init__ method to allow for more customized error messages.
 Consider documenting the purpose and usage of each exception class.

@@ -84,6 +84,12 @@ class BaseClient(so.BaseSocketOperator):
             return first_in_queue
         except IndexError:
             return None
+        
+    # def get_commands(self):
+    #     self.construct_command_body(None, "get_commands")
+        
+    # def get_clients(self):
+    #     self.construct_command_body()
     
 
 class AdminClient(BaseClient):

@@ -1,7 +1,8 @@
 # What is this project?
-I will be creating a TCP server which can coordinate and maintain connections on several clients. Using selectors
+The CustomizableSocketServer is designed to be a lightweight, intuitive balance between structure and flexibility that allows for the quick, easy implementation of a TCP socket server and clients, when something like a full blown REST API is too much.
 
-# Some Notes:
-1. must generate a private key and cert with openssl to use the server
-2. the BaseSocket class is very bare bones, by design. It includes a connection sequence and an echo method, nothing else, so that users can more easily make their own functions
-3. The BaseServer class receives messages and forwards them to destination IP addresses connected to the server. The server is functional without any additions (for simple connection handling at least). Instead of giving the server instance direct access to a database, I would recommend creating a client to host it.
+## What is included?
+1. Server, which can host many connections side by side using selectors module. Supports command input from authenticated admin clients. In addition to a predefined set of commands, user of the server can add aditional commands during instantiation of the server class
+2. Client, which provides a basic foundation for TCP operations and message handling. Designed to be easily extendible with inheritance
+3. Optimized for IDE's that support type hinting
+4. SSL built in (will improve this later)

@@ -171,20 +171,26 @@ class BaseSocketOperator(FileHandler, Logger):
         message = self.__construct_message(connection, body, "file")
         return message
 
-    def construct_command_body(self, connection: Type[ClientSideConnection] | str, command: str, **kwargs: str) -> schemas.CommandBody:
+    def construct_command_body(self, connection: Type[ClientSideConnection] | str | None, command: str, **kwargs: str) -> schemas.CommandBody:
         """
         construct a command message to be issued directly to the server. The desired command must exist within
         the server's command dictionary, as is, or as added by the user
+        set connection to None if you only want to send command to the server.
         """
+        if not connection:
+            connection = 'server'
         body = schemas.CommandBody(command=command,
                            kwargs=kwargs)
         message = self.__construct_message(connection, body, "command")
         return message
 
-    def construct_authentication_body(self, connection: Type[ClientSideConnection] | str, password: str) -> schemas.AuthenticationBody:
+    def construct_authentication_body(self, connection: Type[ClientSideConnection] | str | None, password: str) -> schemas.AuthenticationBody:
         """
         construct an authentication body to submit password to gain admin permissions on the server
+        set connection to None if you want to send the authentication to only the server
         """
+        if not connection:
+            connection = 'server'
         body = schemas.AuthenticationBody(password=password)
         message = self.__construct_message(connection, body, "authentication")
         return message
