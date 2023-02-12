@@ -22,19 +22,17 @@ class BaseServer(so.BaseSocketOperator):
     Base server class.
     """
     def __init__(self, cert_dir: str, key_dir: str, external_commands: dict={}, ip: str=so.LOCALHOST, port: int=8000, buffer_size: int=4096, log_dir: Optional[str]=None):
+        # super init of basesocketoperator here
+        super().__init__(commands=external_commands, port=port, buffer_size=buffer_size, executor=True)
+
         self.create_logger(log_dir=log_dir)
         self.set_type_server()
-        self.set_buffer_size(buffer_size)
         self.connections = []
         self.ip: str = ip
-        self.port: int = port
-        self.set_my_ip(ip)
-        self.hostname: str = socket.gethostbyaddr(ip)
         self.sel = selectors.DefaultSelector()
-
         self.password = ""
 
-        self.commands = {"get_clients":self.__get_clients, 'shutdown':self.__shutdown}.update(external_commands)
+        self.commands.update({"get_clients":self.__get_clients, 'shutdown':self.__shutdown})
 
         self.cert_dir = cert_dir
         self.key_dir = key_dir
@@ -64,18 +62,6 @@ class BaseServer(so.BaseSocketOperator):
             shutdown_message = self.construct_base_body(self.ip, connection.ip, "Shutting Down Server")
             self.send_all(shutdown_message, connection)
 
-    def __process_command(self, command_body: schemas.CommandBody) -> tuple[str, dict]:
-        command = command_body.command
-        kwargs = command_body.kwargs
-        return command, kwargs
-
-    def __command_executor(self, source_connection: so.ServerSideConnection, request_body: schemas.BaseBody) -> schemas.BaseBody:
-        command, kwargs = self.__process_command(request_body)
-        kwargs['admin'] = source_connection.admin
-        result = self.commands.get(command)(**kwargs)
-        send_data = self.construct_base_body(connection=source_connection, content=result)
-        return send_data
-
     def __server_send_all(self, data: Type[schemas.BaseSchema]):
         connection = self.__find_connection(data.destination_ip)
         data = self.prepare_all(data)
@@ -88,12 +74,13 @@ class BaseServer(so.BaseSocketOperator):
             message_type: str = agg_data.message_type
             request_body: Type[schemas.BaseBody] = agg_data.request_body
 
-            if message_type == "command" and agg_data.destination_ip == "server": # if the command is designated for the server
-                send_data: schemas.BaseBody = self.__command_executor(source_connection, request_body)
+            if message_type == "command" and agg_data.destination_ip == self.my_ip: # if the command is designated for the server
+                agg_data.request_body.kwargs['admin'] = source_connection.admin
+                send_data: schemas.BaseSchema = self.command_executor(agg_data)
 
-            elif message_type == "authentication" and agg_data.destination_ip == "server":
+            elif message_type == "authentication" and agg_data.destination_ip == self.my_ip:
                 password: str = request_body.password
-                send_data: schemas.BaseBody = self.__verify_credential(password, source_connection)
+                send_data: schemas.BaseSchema = self.construct_base_body(source_connection, self.__verify_credential(password, source_connection))
 
             send_data = agg_data
             self.__server_send_all(send_data)
