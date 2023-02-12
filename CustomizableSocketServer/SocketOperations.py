@@ -1,6 +1,6 @@
 import json
 import datetime
-from typing import Type, Any, Optional
+from typing import Type, Any, Optional, Callable
 import base64 as b64
 from pydantic import BaseModel
 import logging
@@ -16,13 +16,13 @@ DEFAULT_ROUTE: str = "0.0.0.0"
 LOCALHOST: str = "127.0.0.1"
 
 
-class ClientSideConnection(BaseModel):
+class StandardConnection(BaseModel):
     hostname: str
     ip: str
     conn: Any
 
 
-class ServerSideConnection(ClientSideConnection):
+class ServerSideConnection(StandardConnection):
     admin: bool = False
 
 
@@ -31,47 +31,59 @@ class FileHandler:
         with open(file_path, 'rb') as f:
             return b64.b64encode(f.read()).decode('utf-8')
 
-    def __download_file(self, data: bytes, file_path: str):
-        with open(file_path, 'wb') as f:
-            f.write(b64.b64decode(data))
+    def download_file(self, file: Type[schemas.FileBody]):
+        if file.target_path:
+            with open(file.target_path, 'wb') as f:
+                f.write(b64.b64decode(file.filecontent))
+                return 
+        with open(".", 'wb') as f:
+                f.write(b64.b64decode(file.filecontent))
+                return 
 
 
 class Logger:
-    def create_logger(self, log_dir: Optional[str]=None):
+    def create_logger(self, background: bool=False, log_dir: Optional[str]=None):
         """
         creates the logger object
         """
-        self.logger = logging.getLogger(__name__)
-        c_handler = logging.StreamHandler()
-        c_handler.setLevel(logging.INFO)
-        c_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        c_handler.setFormatter(c_format)
-        self.logger.addHandler(c_handler)
-        if log_dir:
-            f_handler = logging.FileHandler(log_dir)
-            f_handler.setLevel(logging.INFO)
+        if not background:
+            self.logger = logging.getLogger(__name__)
+            c_handler = logging.StreamHandler()
+            c_handler.setLevel(logging.INFO)
+            c_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            c_handler.setFormatter(c_format)
+            self.logger.addHandler(c_handler)
+            if log_dir:
+                f_handler = logging.FileHandler(log_dir)
+                f_handler.setLevel(logging.INFO)
 
-            f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-            f_handler.setFormatter(f_format)
+                f_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                f_handler.setFormatter(f_format)
 
-            self.logger.addHandler(f_handler)
+                self.logger.addHandler(f_handler)
 
 
 class BaseSocketOperator(FileHandler, Logger):
-    def set_buffer_size(self, buffer_size: int):
+    def __init__(self, commands: dict[str:Callable], port: int, buffer_size: int, executor: bool=False):
+        self.commands = commands
+        self.port = port
+        self.my_hostname = socket.gethostname()
+        self.my_ip = socket.gethostbyname(self.my_hostname)
+        self.executor = executor
+        try:
+            self.__set_buffer_size(buffer_size)
+        except:
+            print("Buffersize defaulting to 4096")
+            self.__set_buffer_size(4096)
+
+    def __set_buffer_size(self, buffer_size: int):
         """
         set the size of the buffer
         """
         if (buffer_size & buffer_size-1)==0:
-            self.__buffer_size = buffer_size
+            self.buffer_size = buffer_size
         else:
-            raise exc.ImproperBufferSize()
-
-    def get_buffer_size(self) -> int:
-        """
-        get the size of the buffer
-        """
-        return self.__buffer_size   
+            raise exc.ImproperBufferSize() 
     
     def __unpack_data(self, data: bytes) -> dict | list | str:
         return json.loads(b64.b64decode(data).decode())
@@ -106,7 +118,7 @@ class BaseSocketOperator(FileHandler, Logger):
 
         return encoded_data_fragments
 
-    def recv_all(self, connection: Type[ClientSideConnection]) -> tuple[list, Any]:
+    def recv_all(self, connection: Type[StandardConnection]) -> tuple[list, Any]:
         """
         receive all incoming message fragments, re-assemble, and decode them to get the Schema object back.
         """
@@ -121,12 +133,6 @@ class BaseSocketOperator(FileHandler, Logger):
         
         return schemas.BaseSchema(**self.__unpack_data(b"".join(aggregate_data)))
 
-    def set_my_ip(self, my_ip: str):
-        """
-        set the IP of the client or server object
-        """
-        self.my_ip = my_ip
-
     def set_type_server(self):
         """
         set the socket type to server. Only used once during instantiation to configure socket operations.
@@ -139,8 +145,22 @@ class BaseSocketOperator(FileHandler, Logger):
         """
         self.type_set = "client"
 
-    def __construct_message(self, connection: Type[ClientSideConnection] | str, request_body: Type[schemas.BaseBody], message_type: str) -> Type[schemas.BaseSchema]:
-        if isinstance(Type[ClientSideConnection], connection):
+    def __process_command(self, command_body: schemas.CommandBody) -> tuple[str, dict]:
+        command = command_body.command
+        kwargs = command_body.kwargs
+        return command, kwargs
+    
+    def command_executor(self, request: Type[schemas.BaseSchema]) -> schemas.BaseSchema:
+        if self.executor:
+            command, kwargs = self.__process_command(request.request_body)
+            result = self.commands.get(command)(**kwargs)
+            send_data = self.construct_base_body(connection=request.origin_ip, content=result)
+            return send_data
+        else:
+            raise exc.CommandExecutionNotAllowed
+
+    def __construct_message(self, connection: Type[StandardConnection] | str, request_body: Type[schemas.BaseBody], message_type: str) -> Type[schemas.BaseSchema]:
+        if isinstance(Type[StandardConnection], connection):
             ip = connection.ip
         else:
             ip = connection
@@ -151,7 +171,7 @@ class BaseSocketOperator(FileHandler, Logger):
                             time=str(datetime.datetime.now().strftime("%H:%M:%S")))
         return schema
 
-    def construct_base_body(self, connection: Type[ClientSideConnection] | str, content: dict | list | str) -> schemas.BaseBody:
+    def construct_base_body(self, connection: Type[StandardConnection] | str, content: dict | list | str) -> schemas.BaseBody:
         """
         construct a standard message to be forwarded to another client via the server
         """
@@ -159,7 +179,7 @@ class BaseSocketOperator(FileHandler, Logger):
         message = self.__construct_message(connection, body, "standard")
         return message
 
-    def construct_file_body(self, connection: Type[ClientSideConnection] | str, file_type: str, source_path: str, target_path: str, content: str="") -> schemas.FileBody:
+    def construct_file_body(self, connection: Type[StandardConnection] | str, file_type: str, source_path: str, target_path: str | None, content: str="") -> schemas.FileBody:
         """
         construct a file transfer message to be forwarded to another client via the server
         """
@@ -171,7 +191,7 @@ class BaseSocketOperator(FileHandler, Logger):
         message = self.__construct_message(connection, body, "file")
         return message
 
-    def construct_command_body(self, connection: Type[ClientSideConnection] | str | None, command: str, **kwargs: str) -> schemas.CommandBody:
+    def construct_command_body(self, connection: Type[StandardConnection] | str | None, command: str, **kwargs: str) -> schemas.CommandBody:
         """
         construct a command message to be issued directly to the server. The desired command must exist within
         the server's command dictionary, as is, or as added by the user
@@ -184,7 +204,7 @@ class BaseSocketOperator(FileHandler, Logger):
         message = self.__construct_message(connection, body, "command")
         return message
 
-    def construct_authentication_body(self, connection: Type[ClientSideConnection] | str | None, password: str) -> schemas.AuthenticationBody:
+    def construct_authentication_body(self, connection: Type[StandardConnection] | str | None, password: str) -> schemas.AuthenticationBody:
         """
         construct an authentication body to submit password to gain admin permissions on the server
         set connection to None if you want to send the authentication to only the server
@@ -195,12 +215,12 @@ class BaseSocketOperator(FileHandler, Logger):
         message = self.__construct_message(connection, body, "authentication")
         return message
 
-    def construct_connection(self, ip: str, conn: Any=None) -> Type[ClientSideConnection]:
+    def construct_connection(self, ip: str, conn: Any=None) -> Type[StandardConnection]:
         """
         create a connection object to be used for connection operations
         """
         if self.type_set == "client":
-            connection = ClientSideConnection(hostname=str(socket.gethostbyaddr(ip)), ip=ip, conn=conn)
+            connection = StandardConnection(hostname=str(socket.gethostbyaddr(ip)), ip=ip, conn=conn)
         else: 
             connection = ServerSideConnection(hostname=str(socket.gethostbyaddr(ip)), ip=ip, conn=conn)
         return connection
