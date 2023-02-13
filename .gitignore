@@ -11,3 +11,5 @@ certs
 CustomizeableSocketServer.egg-info
 disclaimer
 dist
+*.pickle
+*.json

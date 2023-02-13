@@ -4,6 +4,7 @@ make it easier for users to send messages to either server or client
 
 for all socket opts:
 make a unified protocol to do ssl wrappings, so that there is not such a large amount of errors when improving SSL functionality.
+make it so that the file body constructor can figure out file name and type by itself
 FOr server:
 Use a more secure password hashing library like bcrypt instead of the simple hashlib.
 use more secure ssl encryption
