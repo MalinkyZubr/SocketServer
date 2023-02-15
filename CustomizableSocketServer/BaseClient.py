@@ -22,14 +22,14 @@ logging.basicConfig(level=logging.INFO)
 
 
 class BaseClient(so.BaseSocketOperator):
-    def __init__(self, commands: dict[str:Callable], standard_rules: list[Callable]=[], 
+    def __init__(self, commands: dict[str:Callable], cert_path: str, standard_rules: list[Callable]=[], 
                  executor: bool=False, background: bool=False, allowed_file_types: list=[], 
                  server_ip: str=so.LOCALHOST, port: int=8000, buffer_size: int=4096, 
                  log_dir: Optional[str]=None):
         
         if isinstance(commands, str) and isinstance(standard_rules, str):
             self.commands, self.standard_rules = utilities.extract_config_pickles(commands, standard_rules)
-        super().__init__(commands=commands, port=port, buffer_size=buffer_size, executor=executor)
+        super().__init__(commands=commands, port=port, buffer_size=buffer_size, executor=executor, cert_path=cert_path)
         self.create_logger(background=background, log_dir=log_dir)
         self.set_type_client()
         self.__server_connection = None
@@ -74,7 +74,7 @@ class BaseClient(so.BaseSocketOperator):
                     return "Successful File Download"
                 except exc.FileNotApproved:
                     self.bounceback(message, "file type not approved")
-                    return
+                    return "Failed file download"
             case ("command", self.executor):
                 try:
                     result = self.command_executor(request=message)
@@ -103,7 +103,8 @@ class BaseClient(so.BaseSocketOperator):
         """
         try:
             self.sock.connect((self.server_ip, self.port))
-            self.sock = ssl.wrap_socket(self.sock, ssl_version=ssl.PROTOCOL_SSLv23)
+            # self.sock = ssl.wrap_socket(self.sock, ssl_version=ssl.PROTOCOL_SSLv23)
+            self.sock = self.ssl_wrap(self.sock, self.server_ip)
             self.__server_connection = self.construct_connection(str(self.server_ip), self.sock)
             self.sel.register(self.__server_connection.conn, selectors.EVENT_READ, self.__receive_messages)
         except Exception as e:

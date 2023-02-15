@@ -5,6 +5,7 @@ import base64 as b64
 from pydantic import BaseModel
 import logging
 import socket
+import ssl
 if __name__ != "__main__":
     from . import schemas
     from . import exceptions as exc
@@ -27,18 +28,17 @@ class ServerSideConnection(StandardConnection):
 
 
 class FileHandler:
-    def __upload_file(self, file_path: str) -> bytes:
+    def upload_file(self, file_path: str) -> bytes:
         with open(file_path, 'rb') as f:
             return b64.b64encode(f.read()).decode('utf-8')
 
     def download_file(self, file: Type[schemas.FileBody]):
         if file.target_path:
-            with open(file.target_path, 'wb') as f:
+            with open(file.target_path + file.name, 'wb') as f:
                 f.write(b64.b64decode(file.filecontent))
                 return 
         with open(".", 'wb') as f:
                 f.write(b64.b64decode(file.filecontent))
-                return 
 
 
 class Logger:
@@ -64,17 +64,29 @@ class Logger:
 
 
 class BaseSocketOperator(FileHandler, Logger):
-    def __init__(self, commands: dict[str:Callable], port: int, buffer_size: int, executor: bool=False):
+    def __init__(self, commands: dict[str:Callable], port: int, buffer_size: int, executor: bool=False, cert_path: str | None=None, key_path: str | None=None):
         self.commands = commands
         self.port = port
         self.my_hostname = socket.gethostname()
         self.my_ip = socket.gethostbyname(self.my_hostname)
         self.executor = executor
+        self.cert_path = cert_path
+        self.key_path = key_path
         try:
             self.__set_buffer_size(buffer_size)
         except:
             print("Buffersize defaulting to 4096")
             self.__set_buffer_size(4096)
+
+    def ssl_wrap(self, connection: socket.socket, address: str):
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        if self.type_set = server:
+            context.load_cert_chain(self.cert_path, self.key_path)
+            wrapped = context.wrap_socket(connection, server_side=True)
+        else:
+            context.load_verify_locations(self.cert_path)
+            wrapped = context.wrap_socket(connection, server_hostname=socket.gethostbyaddr(address))
+        return wrapped
 
     def __set_buffer_size(self, buffer_size: int):
         """
@@ -179,15 +191,15 @@ class BaseSocketOperator(FileHandler, Logger):
         message = self.__construct_message(connection, body, "standard")
         return message
 
-    def construct_file_body(self, connection: Type[StandardConnection] | str, file_type: str, source_path: str, target_path: str | None, content: str="") -> schemas.FileBody:
+    def construct_file_body(self, connection: Type[StandardConnection] | str, source_path: str, target_path: str | None) -> schemas.FileBody:
         """
         construct a file transfer message to be forwarded to another client via the server
         """
+        file_name = source_path.split(r"\\")[-1]
         file_content = self.__upload_file(source_path)
-        body = schemas.FileBody(file_type=file_type, 
+        body = schemas.FileBody(file_name=file_name, 
                         target_path=target_path,
-                        file_content=file_content,
-                        content=content)
+                        file_content=self.upload_file(source_path))
         message = self.__construct_message(connection, body, "file")
         return message
 

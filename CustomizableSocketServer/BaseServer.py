@@ -23,7 +23,7 @@ class BaseServer(so.BaseSocketOperator):
     """
     def __init__(self, cert_dir: str, key_dir: str, external_commands: dict={}, ip: str=so.LOCALHOST, port: int=8000, buffer_size: int=4096, log_dir: Optional[str]=None):
         # super init of basesocketoperator here
-        super().__init__(commands=external_commands, port=port, buffer_size=buffer_size, executor=True)
+        super().__init__(commands=external_commands, port=port, buffer_size=buffer_size, executor=True, cert_path=cert_dir, key_path=key_dir)
 
         self.create_logger(log_dir=log_dir)
         self.set_type_server()
@@ -33,9 +33,6 @@ class BaseServer(so.BaseSocketOperator):
         self.password = ""
 
         self.commands.update({"get_clients":self.__get_clients, 'shutdown':self.__shutdown})
-
-        self.cert_dir = cert_dir
-        self.key_dir = key_dir
 
         # Socket Setup
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -98,10 +95,12 @@ class BaseServer(so.BaseSocketOperator):
     def __accept_connection(self):
         try:
             conn, addr = self.sock.accept()
-            self.logger.info(f'Connection request with {addr[0]} received')
-            conn = ssl.wrap_socket(conn, ssl_version=ssl.PROTOCOL_SSLv23, server_side=True, certfile=self.cert_dir, keyfile=self.key_dir)
+            ip = str(addr[0])
+            self.logger.info(f'Connection request with ip of {ip} received')
+            #conn = ssl.wrap_socket(conn, ssl_version=ssl.PROTOCOL_SSLv23, server_side=True, certfile=self.cert_dir, keyfile=self.key_dir)
+            conn = self.ssl_wrap(conn, ip)
             conn.setblocking(False)
-            connection = self.construct_connection(str(addr[0]), conn)
+            connection = self.construct_connection(ip, conn)
             self.connections.append(connection)
 
             self.sel.register(conn, selectors.EVENT_READ, lambda: self.__process_requests(source_connection=connection))

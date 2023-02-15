@@ -8,7 +8,6 @@ class BaseBody(BaseModel):
 
 class FileBody(BaseBody):
     file_name: str
-    file_type: str
     target_path: str | None
     file_content: bytes
 
