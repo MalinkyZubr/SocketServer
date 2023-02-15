@@ -2,7 +2,6 @@ import selectors
 import socket
 from typing import IO, Type
 import ssl
-import selectors
 import logging
 import os
 import threading

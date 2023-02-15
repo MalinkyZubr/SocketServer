@@ -18,9 +18,7 @@ You can also add comments to describe the logic of your code.
 
 add standardized commands for the client to make operations easier
 
-add a way to filter what is done with received messages based on their origin
-
-standardize how the client communicates directly with the server, schema simplification
+make filter code more efficient. DOnt have trty accepts in every case, just have each throw error under conditions and have one try accept
 
 for exceptions:
 Consider adding optional parameters to the __init__ method to allow for more customized error messages.

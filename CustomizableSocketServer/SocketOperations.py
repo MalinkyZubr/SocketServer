@@ -80,7 +80,7 @@ class BaseSocketOperator(FileHandler, Logger):
 
     def ssl_wrap(self, connection: socket.socket, address: str):
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        if self.type_set = server:
+        if self.type_set == server:
             context.load_cert_chain(self.cert_path, self.key_path)
             wrapped = context.wrap_socket(connection, server_side=True)
         else:
