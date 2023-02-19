@@ -13,3 +13,4 @@ disclaimer
 dist
 *.pickle
 *.json
+test.py

@@ -26,6 +26,7 @@ class BaseClient(so.BaseSocketOperator):
                  server_ip: str=so.LOCALHOST, port: int=8000, buffer_size: int=4096, 
                  log_dir: Optional[str]=None):
         
+        logging.basicConfig(level=logging.INFO)
         if isinstance(commands, str) and isinstance(standard_rules, str):
             self.commands, self.standard_rules = utilities.extract_config_pickles(commands, standard_rules)
         super().__init__(commands=commands, port=port, buffer_size=buffer_size, executor=executor, cert_path=cert_path)
