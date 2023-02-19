@@ -25,6 +25,7 @@ class BaseServer(so.BaseSocketOperator):
         # super init of basesocketoperator here
         super().__init__(commands=external_commands, port=port, buffer_size=buffer_size, executor=True, cert_path=cert_dir, key_path=key_dir)
 
+        logging.basicConfig(level=logging.INFO)
         self.create_logger(log_dir=log_dir)
         self.set_type_server()
         self.connections = []
