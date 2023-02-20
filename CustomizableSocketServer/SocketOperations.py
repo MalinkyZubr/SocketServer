@@ -6,15 +6,19 @@ from pydantic import BaseModel
 import logging
 import socket
 import ssl
-if __name__ != "__main__":
+try:
     from . import schemas
     from . import exceptions as exc
-else:
+except:
     import schemas
     import exceptions as exc
 
 DEFAULT_ROUTE: str = "0.0.0.0"
 LOCALHOST: str = "127.0.0.1"
+
+
+class SocketObject:
+    pass
 
 
 class StandardConnection(BaseModel):
@@ -48,11 +52,6 @@ class Logger:
         """
         if not background:
             self.logger = logging.getLogger(__name__)
-            c_handler = logging.StreamHandler()
-            c_handler.setLevel(logging.INFO)
-            c_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-            c_handler.setFormatter(c_format)
-            self.logger.addHandler(c_handler)
             if log_dir:
                 f_handler = logging.FileHandler(log_dir)
                 f_handler.setLevel(logging.INFO)
@@ -78,14 +77,15 @@ class BaseSocketOperator(FileHandler, Logger):
             print("Buffersize defaulting to 4096")
             self.__set_buffer_size(4096)
 
-    def ssl_wrap(self, connection: socket.socket, address: str):
-        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    def ssl_wrap(self, connection: SocketObject, address: str):
         if self.type_set == 'server':
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             context.load_cert_chain(self.cert_path, self.key_path)
             wrapped = context.wrap_socket(connection, server_side=True)
         else:
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
             context.load_verify_locations(self.cert_path)
-            wrapped = context.wrap_socket(connection, server_hostname=socket.gethostbyaddr(address))
+            wrapped = context.wrap_socket(connection, server_hostname=socket.gethostbyaddr(address)[0])
         return wrapped
 
     def __set_buffer_size(self, buffer_size: int):
@@ -104,7 +104,7 @@ class BaseSocketOperator(FileHandler, Logger):
         return b64.b64encode(json.dumps(data).encode())
 
     def __calculate_data_length(self, data: bytes) -> int:
-        num_fragments = int(len(data) / self.__buffer_size) + 1# what about the edgecase where the data size is a multiple of the self size?
+        num_fragments = int(len(data) / self.buffer_size) + 1# what about the edgecase where the data size is a multiple of the self size?
         return num_fragments
 
     def prepare_all(self, package: Type[schemas.BaseSchema]) -> list:
@@ -118,14 +118,14 @@ class BaseSocketOperator(FileHandler, Logger):
         fragments = self.__calculate_data_length(encoded_data)
         encoded_data_fragments = []
         for x in range(fragments):
-            data_index = x * self.__buffer_size
-            if (data_index + self.__buffer_size) > len(encoded_data):
+            data_index = x * self.buffer_size
+            if (data_index + self.buffer_size) > len(encoded_data):
                 encoded_data_fragments.append(encoded_data[data_index:])
             else:
-                encoded_data_fragments.append(encoded_data[data_index:data_index + self.__buffer_size])
+                encoded_data_fragments.append(encoded_data[data_index:data_index + self.buffer_size])
         
         if len(encoded_data_fragments) > 1:
-            if len(encoded_data_fragments[-1]) == self.__buffer_size:
+            if len(encoded_data_fragments[-1]) == self.buffer_size:
                 encoded_data_fragments.append(self.__pack_data("end"))
 
         return encoded_data_fragments
@@ -135,9 +135,9 @@ class BaseSocketOperator(FileHandler, Logger):
         receive all incoming message fragments, re-assemble, and decode them to get the Schema object back.
         """
         aggregate_data = []
-        length = self.__buffer_size
-        while length == self.__buffer_size:
-            loop_data = connection.conn.recv(self.__buffer_size)
+        length = self.buffer_size
+        while length == self.buffer_size:
+            loop_data = connection.conn.recv(self.buffer_size)
             if self.__unpack_data(loop_data) == 'end': # in case the message is an exact multiple of the buffer size
                 break
             length = len(loop_data)
@@ -158,23 +158,27 @@ class BaseSocketOperator(FileHandler, Logger):
         self.type_set = "client"
 
     def __process_command(self, command_body: schemas.CommandBody) -> tuple[str, dict]:
-        command = command_body.command
-        kwargs = command_body.kwargs
+        command = command_body['command']
+        kwargs = command_body['kwargs']
         return command, kwargs
     
     def command_executor(self, request: Type[schemas.BaseSchema]) -> schemas.BaseSchema:
         if self.executor:
             command, kwargs = self.__process_command(request.request_body)
-            result = self.commands.get(command)(**kwargs)
+            try:
+                result = self.commands[command](**kwargs)
+                print(result)
+            except IndexError:
+                raise exc.CommandNotFound
             send_data = self.construct_base_body(connection=request.origin_ip, content=result)
             return send_data
         else:
             raise exc.CommandExecutionNotAllowed
 
     def __construct_message(self, connection: Type[StandardConnection] | str, request_body: Type[schemas.BaseBody], message_type: str) -> Type[schemas.BaseSchema]:
-        if isinstance(Type[StandardConnection], connection):
+        try:
             ip = connection.ip
-        else:
+        except:
             ip = connection
         schema = schemas.BaseSchema(origin_ip=self.my_ip, 
                             destination_ip=ip, 
@@ -196,10 +200,10 @@ class BaseSocketOperator(FileHandler, Logger):
         construct a file transfer message to be forwarded to another client via the server
         """
         file_name = source_path.split(r"\\")[-1]
-        file_content = self.__upload_file(source_path)
+        file_content = self.upload_file(source_path)
         body = schemas.FileBody(file_name=file_name, 
                         target_path=target_path,
-                        file_content=self.upload_file(source_path))
+                        file_content=file_content)
         message = self.__construct_message(connection, body, "file")
         return message
 
@@ -232,7 +236,7 @@ class BaseSocketOperator(FileHandler, Logger):
         create a connection object to be used for connection operations
         """
         if self.type_set == "client":
-            connection = StandardConnection(hostname=str(socket.gethostbyaddr(ip)), ip=ip, conn=conn)
+            connection = StandardConnection(hostname=str(socket.gethostbyaddr(ip))[0], ip=ip, conn=conn)
         else: 
-            connection = ServerSideConnection(hostname=str(socket.gethostbyaddr(ip)), ip=ip, conn=conn)
+            connection = ServerSideConnection(hostname=str(socket.gethostbyaddr(ip))[0], ip=ip, conn=conn)
         return connection

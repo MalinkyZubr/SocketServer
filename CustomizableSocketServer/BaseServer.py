@@ -6,15 +6,15 @@ import ssl
 import getpass
 import hashlib
 from typing import Type, Optional, Callable
-if __name__ != "__main__":
+print(__name__)
+try:
     from . import SocketOperations as so
     from . import exceptions as exc
     from . import schemas
-else:
+except:
     import SocketOperations as so
     import exceptions as exc
     import schemas
-logging.basicConfig(level=logging.INFO)
 
 
 class BaseServer(so.BaseSocketOperator):
@@ -33,7 +33,7 @@ class BaseServer(so.BaseSocketOperator):
         self.sel = selectors.DefaultSelector()
         self.password = ""
 
-        self.commands.update({"get_clients":self.__get_clients, 'shutdown':self.__shutdown})
+        self.commands.update({"get_clients":self.__get_clients, 'shutdown':self.__shutdown, "get_commands":self.__get_commands})
 
         # Socket Setup
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -42,13 +42,16 @@ class BaseServer(so.BaseSocketOperator):
         self.sock.listen(10)
 
     def __get_clients(self, **kwargs: dict) -> list:
-        return [conn.__str__() for conn in self.connections]
+        return [(conn.hostname, conn.ip) for conn in self.connections]
+    
+    def __get_commands(self, **kwargs: dict) -> list:
+        return list(self.commands.keys())
 
     def __find_connection(self, destination_ip: str) -> so.ServerSideConnection:
         for connection in self.connections:
             if connection.ip == destination_ip:
                 return connection
-            raise exc.ConnectionNotFoundError()
+        raise exc.ConnectionNotFoundError()
 
     def __check_admin(self, **kwargs: dict) -> None:
         if not kwargs['admin']:
@@ -58,12 +61,13 @@ class BaseServer(so.BaseSocketOperator):
         self.__check_admin(**kwargs)
         for connection in self.connections:
             shutdown_message = self.construct_base_body(self.ip, connection.ip, "Shutting Down Server")
-            self.send_all(shutdown_message, connection)
+            self.__server_send_all(shutdown_message, connection)
 
     def __server_send_all(self, data: Type[schemas.BaseSchema]):
         connection = self.__find_connection(data.destination_ip)
         data = self.prepare_all(data)
         for fragment in data: 
+            print(type(connection))
             connection.conn.send(fragment)
 
     def __process_requests(self, source_connection: so.ServerSideConnection) -> None:
@@ -72,15 +76,20 @@ class BaseServer(so.BaseSocketOperator):
             message_type: str = agg_data.message_type
             request_body: Type[schemas.BaseBody] = agg_data.request_body
 
-            if message_type == "command" and agg_data.destination_ip == self.my_ip: # if the command is designated for the server
-                agg_data.request_body.kwargs['admin'] = source_connection.admin
+            print(f'\n\nAGG DATA: {agg_data}\n\n')
+
+            if message_type == "command" and agg_data.destination_ip == 'server': # if the command is designated for the server
+                agg_data.request_body['kwargs']['admin'] = source_connection.admin
                 send_data: schemas.BaseSchema = self.command_executor(agg_data)
+                print(send_data)
+                print("done with this")
 
             elif message_type == "authentication" and agg_data.destination_ip == self.my_ip:
                 password: str = request_body.password
                 send_data: schemas.BaseSchema = self.construct_base_body(source_connection, self.__verify_credential(password, source_connection))
-
-            send_data = agg_data
+            else:
+                send_data = agg_data
+            print(send_data)
             self.__server_send_all(send_data)
 
         except json.decoder.JSONDecodeError: # if connection was lost
@@ -121,7 +130,7 @@ class BaseServer(so.BaseSocketOperator):
     def __initialize_password(self, password: str | None=None) -> None:
         if not password:
             while True:
-                password = getpass.getpass(prompt="Enter the server password: ")
+                password = "sillygazoobaboobashitassfuckdick" #getpass.getpass(prompt="Enter the server password: ")
                 if len(password) < 10:
                     print("\nPassword length is too low, must be at least 10 characters!\n")
                     continue
