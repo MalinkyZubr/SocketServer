@@ -130,7 +130,7 @@ class BaseServer(so.BaseSocketOperator):
     def __initialize_password(self, password: str | None=None) -> None:
         if not password:
             while True:
-                password = "sillygazoobaboobashitassfuckdick" #getpass.getpass(prompt="Enter the server password: ")
+                password = "thisisatestpaswordthisisatest" #getpass.getpass(prompt="Enter the server password: ")
                 if len(password) < 10:
                     print("\nPassword length is too low, must be at least 10 characters!\n")
                     continue
