@@ -21,7 +21,7 @@ except:
 
 class BaseClient(so.BaseSocketOperator):
     def __init__(self, cert_path: str, standard_rules: list[Callable]=[], 
-                 executor: bool=False, background: bool=False, allowed_file_types: list=[], 
+                 executor: int=so.NO_EXECUTOR, background: bool=False, allowed_file_types: list=[], 
                  server_ip: str=so.LOCALHOST, port: int=8000, buffer_size: int=4096, 
                  log_dir: Optional[str]=None, commands: dict[str:Callable]={}):
         
@@ -74,7 +74,7 @@ class BaseClient(so.BaseSocketOperator):
                 except exc.FileNotApproved:
                     self.bounceback(message, "file type not approved")
                     return "Failed file download"
-            case ("command", self.executor, self.commands):
+            case ("command", self.executor):
                 try:
                     result = self.command_executor(request=message)
                     self.bounceback(message, result)

@@ -23,7 +23,7 @@ class BaseServer(so.BaseSocketOperator):
     """
     def __init__(self, cert_dir: str, key_dir: str, external_commands: dict={}, ip: str=so.LOCALHOST, port: int=8000, buffer_size: int=4096, log_dir: Optional[str]=None):
         # super init of basesocketoperator here
-        super().__init__(commands=external_commands, port=port, buffer_size=buffer_size, executor=True, cert_path=cert_dir, key_path=key_dir)
+        super().__init__(commands=external_commands, port=port, buffer_size=buffer_size, executor=so.LEVEL_1_EXECUTOR, cert_path=cert_dir, key_path=key_dir)
 
         logging.basicConfig(level=logging.INFO)
         self.create_logger(log_dir=log_dir)

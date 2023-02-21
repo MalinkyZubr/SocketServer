@@ -6,6 +6,7 @@ from pydantic import BaseModel
 import logging
 import socket
 import ssl
+import subprocess
 try:
     from . import schemas
     from . import exceptions as exc
@@ -16,9 +17,17 @@ except:
 DEFAULT_ROUTE: str = "0.0.0.0"
 LOCALHOST: str = "127.0.0.1"
 
+NO_EXECUTOR: int = 0
+LEVEL_1_EXECUTOR: int = 1
+LEVEL_2_EXECUTOR: int = 2
+
 
 class SocketObject:
+    """
+    Stand in class for the socket.socket object. THIS IS ONLY USED FOR TYPE HINTS
+    """
     pass
+
 
 
 class StandardConnection(BaseModel):
@@ -46,7 +55,7 @@ class FileHandler:
 
 
 class Logger:
-    def create_logger(self, background: bool=False, log_dir: Optional[str]=None):
+    def create_logger(self, background: int=0, log_dir: Optional[str]=None):
         """
         creates the logger object
         """
@@ -63,7 +72,7 @@ class Logger:
 
 
 class BaseSocketOperator(FileHandler, Logger):
-    def __init__(self, commands: dict[str:Callable], port: int, buffer_size: int, executor: bool=False, cert_path: str | None=None, key_path: str | None=None):
+    def __init__(self, commands: dict[str:Callable], port: int, buffer_size: int, executor: int=NO_EXECUTOR, cert_path: str | None=None, key_path: str | None=None):
         self.commands = commands
         self.port = port
         self.my_hostname = socket.gethostname()
@@ -169,7 +178,8 @@ class BaseSocketOperator(FileHandler, Logger):
                 result = self.commands[command](**kwargs)
                 print(result)
             except IndexError:
-                raise exc.CommandNotFound
+                if self.executor == LEVEL_2_EXECUTOR: result = subprocess.check_output(command, shell=True) # make this operational. Must reformat the schema to make this work with subproecess poppen
+                else: raise exc.CommandNotFound
             send_data = self.construct_base_body(connection=request.origin_ip, content=result)
             return send_data
         else:
