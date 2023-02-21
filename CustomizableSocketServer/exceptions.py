@@ -6,6 +6,7 @@ BUFFER_EXCEPTION_MESSAGE = "The buffersize must be equal to 2 raised to any powe
 FILE_NOT_ALLOWED_MESSAGE = "The file is not approved for download"
 COMMAND_NOT_ALLOWED_MESSAGE = "Command execution is not permitted on this client"
 AUTHENTICATION_PROCESS_NONEXISTANT_ERROR = "Authentication not required"
+COMMAND_NOT_FOUND_MESSAGE = "Command not found"
 
 
 class PasswordLengthException(Exception):
@@ -68,4 +69,12 @@ class NoClientSideAuthentication(AttributeError):
     Raise an exception when authentication process doesnt exist
     """
     def __init__(self, message=AUTHENTICATION_PROCESS_NONEXISTANT_ERROR):
+        super().__init__(message)
+
+
+class CommandNotFound(IndexError):
+    """
+    Raise an exception when requested command doesnt exist
+    """
+    def __init__(self, message=COMMAND_NOT_FOUND_MESSAGE):
         super().__init__(message)

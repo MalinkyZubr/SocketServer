@@ -7,24 +7,23 @@ import os
 import threading
 import pickle
 from typing import Optional, Callable
-if __name__ != "__main__":
+try:
     from . import SocketOperations as so
     from . import exceptions as exc
     from . import schemas
     from . import utilities
-else:
+except:
     import SocketOperations as so
     import exceptions as exc
     import schemas
     import utilities
-logging.basicConfig(level=logging.INFO)
 
 
 class BaseClient(so.BaseSocketOperator):
-    def __init__(self, commands: dict[str:Callable], cert_path: str, standard_rules: list[Callable]=[], 
+    def __init__(self, cert_path: str, standard_rules: list[Callable]=[], 
                  executor: bool=False, background: bool=False, allowed_file_types: list=[], 
                  server_ip: str=so.LOCALHOST, port: int=8000, buffer_size: int=4096, 
-                 log_dir: Optional[str]=None):
+                 log_dir: Optional[str]=None, commands: dict[str:Callable]={}):
         
         logging.basicConfig(level=logging.INFO)
         if isinstance(commands, str) and isinstance(standard_rules, str):
@@ -44,7 +43,7 @@ class BaseClient(so.BaseSocketOperator):
         self.sel = selectors.DefaultSelector()
 
     def unpack_config_commands(self, config: dict)->tuple[dict[str:Callable], list[Callable]]:
-        commands = pickle.loads(bytes(config['commands']))
+        self.commands = pickle.loads(bytes(config['commands']))
 
     def bounceback(self, message: Type[schemas.BaseBody], response: str):
         bounceback = self.construct_base_body(self, message.origin_ip, response)
@@ -75,7 +74,7 @@ class BaseClient(so.BaseSocketOperator):
                 except exc.FileNotApproved:
                     self.bounceback(message, "file type not approved")
                     return "Failed file download"
-            case ("command", self.executor):
+            case ("command", self.executor, self.commands):
                 try:
                     result = self.command_executor(request=message)
                     self.bounceback(message, result)
@@ -104,7 +103,9 @@ class BaseClient(so.BaseSocketOperator):
         try:
             self.sock.connect((self.server_ip, self.port))
             # self.sock = ssl.wrap_socket(self.sock, ssl_version=ssl.PROTOCOL_SSLv23)
+            print(self.sock)
             self.sock = self.ssl_wrap(self.sock, self.server_ip)
+            print(self.sock)
             self.__server_connection = self.construct_connection(str(self.server_ip), self.sock)
             self.sel.register(self.__server_connection.conn, selectors.EVENT_READ, self.__receive_messages)
         except Exception as e:
@@ -128,12 +129,16 @@ class BaseClient(so.BaseSocketOperator):
     def get_clients(self):
         message = self.construct_command_body(self.server_ip, "get_clients")
         self.client_send_all(message)
+
+    def close_connection(self):
+        client.sel.unregister(client.__server_connection.conn)
+        client.__server_connection.conn.close()
     
 
 class AdminClient(BaseClient):
     def submit_password(self, password: str):
         auth_message = self.construct_authentication_body(password)
-        self.client_send(auth_message)
+        self.client_send_all(auth_message)
 
     def shutdown(self):
         message = self.construct_command_body(self.server_ip, "shutdown")
@@ -141,19 +146,20 @@ class AdminClient(BaseClient):
 
 
 if __name__ == "__main__":
-    client = BaseClient()
+    client = BaseClient(cert_path=r'C:\Users\ahuma\Desktop\certs\cert.pem')
 
     def command_line_input():
         while True:
             try:
                 command = input("\n> ")
-                message = client.construct_base_body('127.0.0.1', command)
+                message = client.construct_command_body(connection=None, command=command)
                 client.client_send_all(message)
             except (EOFError, KeyboardInterrupt) as e:
                 print(e)
-                client.sel.unregister(client.connection.conn)
-                client.connection.conn.close()
+                client.close_connection()
                 os._exit(0)
+            except Exception as e:
+                print(e)
 
     def start_client_runtime():
         input_thread = threading.Thread(target=command_line_input)
