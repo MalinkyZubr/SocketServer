@@ -1,3 +1,5 @@
+MUST DO RESTRUCTURING OF COMMAND EXECUTION PROCESSES. The current schema, with command and kwargs as separate attributes of the command body schema does not translate well to be compatible with subprocess shell commands. THis must be modified to work more smoothly, but will require significant restructuring, and planning. Maybe make it so the command constructor can decide whether to use a list or a dict? Maybe use a more standardized protocol within the custom commands inside of the base server and base client
+
 too much schema bloat! simplify schema operations immediately!!!
 
 make it easier for users to send messages to either server or client

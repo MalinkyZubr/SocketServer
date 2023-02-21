@@ -13,7 +13,7 @@ class FileBody(BaseBody):
 
 
 class CommandBody(BaseBody):
-    command: str
+    command: dict | list
     kwargs: dict
 
 
