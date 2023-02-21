@@ -172,18 +172,18 @@ class BaseSocketOperator(FileHandler, Logger):
         return command, kwargs
     
     def command_executor(self, request: Type[schemas.BaseSchema]) -> schemas.BaseSchema:
-        if self.executor:
-            command, kwargs = self.__process_command(request.request_body)
-            try:
-                result = self.commands[command](**kwargs)
-                print(result)
-            except IndexError:
-                if self.executor == LEVEL_2_EXECUTOR: result = subprocess.check_output(command, shell=True) # make this operational. Must reformat the schema to make this work with subproecess poppen
-                else: raise exc.CommandNotFound
-            send_data = self.construct_base_body(connection=request.origin_ip, content=result)
-            return send_data
+        command, kwargs = self.__process_command(request.request_body)
+        if self.executor and command in self.commands:
+            result = self.commands[command](**kwargs)
+            print(result)
+        elif self.executor == LEVEL_1_EXECUTOR and command not in self.commands: 
+            raise exc.CommandNotFound
+        elif self.executor == LEVEL_2_EXECUTOR: 
+            result = subprocess.check_output(command, shell=True).decode() # make this operational. Must reformat the schema to make this work with subproecess poppen   
         else:
             raise exc.CommandExecutionNotAllowed
+        send_data = self.construct_base_body(connection=request.origin_ip, content=result)
+        return send_data
 
     def __construct_message(self, connection: Type[StandardConnection] | str, request_body: Type[schemas.BaseBody], message_type: str) -> Type[schemas.BaseSchema]:
         try:

@@ -1,8 +1,5 @@
-import pickle
-import base64 as b64
+import subprocess
 
-def silly():
-    print("silly")
 
-pickle.dumps(silly)
-
+x = subprocess.check_output(['silly'], shell=True).decode()
+print(x)

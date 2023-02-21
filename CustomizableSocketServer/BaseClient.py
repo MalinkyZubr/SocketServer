@@ -6,6 +6,7 @@ import logging
 import os
 import threading
 import pickle
+import subprocess
 from typing import Optional, Callable
 try:
     from . import SocketOperations as so
@@ -81,6 +82,8 @@ class BaseClient(so.BaseSocketOperator):
                     return result
                 except exc.CommandExecutionNotAllowed:
                     self.bounceback(message, "Command execution not allowed on this client")
+                except subprocess.CalledProcessError:
+                    self.bounceback(message, "Shell failed to execute command")
             case "authentiation":
                 self.bounceback("Authentication not allowed")
 
