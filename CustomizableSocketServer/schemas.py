@@ -2,6 +2,10 @@ from typing import Type, Any
 from pydantic import BaseModel
 
 
+STANDARD_COMMAND: str = "standard"
+CONSOLE_COMMAND: str = "console"
+
+
 class BaseBody(BaseModel):
     content: str | dict | list = ""
 
@@ -13,7 +17,8 @@ class FileBody(BaseBody):
 
 
 class CommandBody(BaseBody):
-    command: dict | list
+    command_type: str = STANDARD_COMMAND
+    command: str
     kwargs: dict
 
 

@@ -14,6 +14,7 @@ except:
     import schemas
     import exceptions as exc
 
+
 DEFAULT_ROUTE: str = "0.0.0.0"
 LOCALHOST: str = "127.0.0.1"
 
@@ -171,6 +172,14 @@ class BaseSocketOperator(FileHandler, Logger):
         kwargs = command_body['kwargs']
         return command, kwargs
     
+    def __unpack_console_command(self, command, kwargs):
+        command = [command]
+        for key, value in kwargs.items():
+            command + [key, value]
+        if not command[-1]:
+            return command[:-1]
+        return command
+
     def command_executor(self, request: Type[schemas.BaseSchema]) -> schemas.BaseSchema:
         command, kwargs = self.__process_command(request.request_body)
         if self.executor and command in self.commands:
@@ -179,7 +188,8 @@ class BaseSocketOperator(FileHandler, Logger):
         elif self.executor == LEVEL_1_EXECUTOR and command not in self.commands: 
             raise exc.CommandNotFound
         elif self.executor == LEVEL_2_EXECUTOR: 
-            result = subprocess.check_output(command, shell=True).decode() # make this operational. Must reformat the schema to make this work with subproecess poppen   
+            command = self.__unpack_console_command(command, kwargs)
+            result = str(subprocess.check_output(command, shell=True).decode()) # make this operational. Must reformat the schema to make this work with subproecess poppen   
         else:
             raise exc.CommandExecutionNotAllowed
         send_data = self.construct_base_body(connection=request.origin_ip, content=result)
@@ -217,16 +227,22 @@ class BaseSocketOperator(FileHandler, Logger):
         message = self.__construct_message(connection, body, "file")
         return message
 
-    def construct_command_body(self, connection: Type[StandardConnection] | str | None, command: str, **kwargs: str) -> schemas.CommandBody:
+    def construct_command_body(self, command: str, kwargs: dict, connection: Type[StandardConnection] | str | None=None) -> schemas.CommandBody:
         """
         construct a command message to be issued directly to the server. The desired command must exist within
         the server's command dictionary, as is, or as added by the user
         set connection to None if you only want to send command to the server.
         """
+
         if not connection:
             connection = 'server'
+        if command in list(self.commands.keys()):
+            command_type = schemas.STANDARD_COMMAND
+        else:
+            command_type = schemas.CONSOLE_COMMAND
         body = schemas.CommandBody(command=command,
-                           kwargs=kwargs)
+                           kwargs=kwargs,
+                           command_type=command_type)
         message = self.__construct_message(connection, body, "command")
         return message
 
