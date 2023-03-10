@@ -1,5 +1,6 @@
-import subprocess
+def silly(x=1,y=2):
+    print(x + y)
 
+stuff = {'x':1,'y':2}
 
-x = subprocess.check_output(['silly'], shell=True).decode()
-print(x)
+silly(**stuff)

@@ -17,9 +17,7 @@ class FileBody(BaseBody):
 
 
 class CommandBody(BaseBody):
-    command_type: str = STANDARD_COMMAND
-    command: str
-    kwargs: dict
+    command: list
 
 
 class AuthenticationBody(BaseBody):
