@@ -8,6 +8,8 @@ import socket
 import ssl
 import subprocess
 import argparse
+import typing
+from TypeEnforcement import type_enforcer
 try:
     from . import schemas
     from . import exceptions as exc
@@ -23,6 +25,7 @@ NO_EXECUTOR: int = 0
 LEVEL_1_EXECUTOR: int = 1
 LEVEL_2_EXECUTOR: int = 2
 
+enforcer = t.TypeEnforcer.enforcer
 
 class SocketObject:
     """
@@ -57,7 +60,8 @@ class FileHandler:
 
 
 class Logger:
-    def create_logger(self, background: int=0, log_dir: Optional[str]=None):
+    @enforcer(recursive=True)
+    def create_logger(self, background: int=0, log_dir: str | None=None):
         """
         creates the logger object
         """
@@ -74,7 +78,8 @@ class Logger:
 
 
 class BaseSocketOperator(FileHandler, Logger):
-    def __init__(self, commands: dict[str:Callable], port: int, buffer_size: int, executor: int=NO_EXECUTOR, cert_path: str | None=None, key_path: str | None=None):
+    @enforcer(recursive=True)
+    def __init__(self, commands: dict[str,Callable], port: int, buffer_size: int, executor: int=NO_EXECUTOR, cert_path: str | None=None, key_path: str | None=None):
         self.commands = commands
         self.port = port
         self.my_hostname = socket.gethostname()
@@ -90,7 +95,8 @@ class BaseSocketOperator(FileHandler, Logger):
             print(e + "\n\nBuffersize defaulting to 4096")
             self.__set_buffer_size(4096)
 
-    def ssl_wrap(self, connection: SocketObject, address: str):
+    @enforcer(recursive=True)
+    def ssl_wrap(self, connection, address: str):
         if self.type_set == 'server':
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             context.load_cert_chain(self.cert_path, self.key_path)
@@ -101,6 +107,7 @@ class BaseSocketOperator(FileHandler, Logger):
             wrapped = context.wrap_socket(connection, server_hostname=socket.gethostbyaddr(address)[0])
         return wrapped
 
+    @enforcer(recursive=True)
     def __set_buffer_size(self, buffer_size: int):
         """
         set the size of the buffer
@@ -110,16 +117,20 @@ class BaseSocketOperator(FileHandler, Logger):
         else:
             raise exc.ImproperBufferSize() 
     
+    @enforcer(recursive=True)
     def __unpack_data(self, data: bytes) -> dict | list | str:
         return json.loads(b64.b64decode(data).decode())
 
+    @enforcer(recursive=True)
     def __pack_data(self, data: dict | list | str) -> bytes:
         return b64.b64encode(json.dumps(data).encode())
 
+    @enforcer(recursive=True)
     def __calculate_data_length(self, data: bytes) -> int:
         num_fragments = int(len(data) / self.buffer_size) + 1# what about the edgecase where the data size is a multiple of the self size?
         return num_fragments
 
+    @enforcer(recursive=True)
     def prepare_all(self, package: Type[schemas.BaseSchema]) -> list:
         """
         take a message and encode it, then break it into its constituent parts in preparation to be send over a socket connection. 
@@ -143,6 +154,7 @@ class BaseSocketOperator(FileHandler, Logger):
 
         return encoded_data_fragments
 
+    @enforcer(recursive=True)
     def recv_all(self, connection: Type[StandardConnection]) -> tuple[list, Any]:
         """
         receive all incoming message fragments, re-assemble, and decode them to get the Schema object back.
@@ -170,29 +182,54 @@ class BaseSocketOperator(FileHandler, Logger):
         """
         self.type_set = "client"
 
-    #def command_executor(self, request: Type[schemas.BaseSchema]) -> schemas.BaseSchema:
-    #     command, kwargs = self.__process_command(request.request_body)
-    #     if self.executor and command in self.commands:
-    #         result = self.commands[command](**kwargs)
-    #         print(result)
-    #     elif self.executor == LEVEL_1_EXECUTOR and command not in self.commands: 
-    #         raise exc.CommandNotFound
-    #     elif self.executor == LEVEL_2_EXECUTOR: 
-    #         command = self.__unpack_console_command(command, kwargs)
-    #         result = str(subprocess.check_output(command, shell=True).decode()) # make this operational. Must reformat the schema to make this work with subproecess poppen   
-    #     else:
-    #         raise exc.CommandExecutionNotAllowed
-    #     send_data = self.construct_base_body(connection=request.origin_ip, content=result)
-    #     return send_data
+    def generate_hints_dict(self, func: Callable) -> dict:
+        args = func.__code__.co_varnames
+        incomplete_hints = typing.get_type_hints(func)
+
+        if 'return' in incomplete_hints:
+            incomplete_hints.pop('return')
+
+        complete_hints: dict = dict()
+        
+        for arg_name in args:
+            try:
+                complete_hints.update({arg_name:incomplete_hints[arg_name]})
+            except KeyError:
+                complete_hints.update({arg_name:typing.Any})
+        
+        return complete_hints
+    
+    @enforcer(recursive=True)
+    def generate_help_menu(self, args: dict) -> str:
+        func_help = ""
+        for arg, dtype in args.items():
+            func_help += f"{arg} expects a(n) {dtype}\n"
+
+    
+    @enforcer(recursive=True)
+    def add_command(self, command: dict[str, Callable]):
+        """
+        accepts a command to add to the object command list. Must be in the format {"command_name":function}
+        """
+        name, command = list(command.items())[0]
+        if name in self.commands:
+            raise exc.CommandAlreadyExists()
+        varnames = self.generate_hints_dict(command)
+        for varname in varnames:
+            if varname not in list(vars(self.parser.parse_args()).keys()):
+                self.parser.add_argument(f"--{varname}")
+        self.commands.update(command)
+
+    @enforcer(recursive=True)
     def command_executor(self, request: Type[schemas.BaseSchema]) -> schemas.BaseSchema:
-        command = request.request_body[command]
+        command = request.request_body['command']
         try:
             command = vars(self.parser.parse_args(command))
             results = self.commands[command['command']](**command)
         except argparse.ArgumentError:
             results 
 
-
+    @enforcer(recursive=True)
     def __construct_message(self, connection: Type[StandardConnection] | str, request_body: Type[schemas.BaseBody], message_type: str) -> Type[schemas.BaseSchema]:
         try:
             ip = connection.ip
@@ -205,6 +242,7 @@ class BaseSocketOperator(FileHandler, Logger):
                             time=str(datetime.datetime.now().strftime("%H:%M:%S")))
         return schema
 
+    @enforcer(recursive=True)
     def construct_base_body(self, connection: Type[StandardConnection] | str, content: dict | list | str) -> schemas.BaseBody:
         """
         construct a standard message to be forwarded to another client via the server
@@ -213,6 +251,7 @@ class BaseSocketOperator(FileHandler, Logger):
         message = self.__construct_message(connection, body, "standard")
         return message
 
+    @enforcer(recursive=True)
     def construct_file_body(self, connection: Type[StandardConnection] | str, source_path: str, target_path: str | None) -> schemas.FileBody:
         """
         construct a file transfer message to be forwarded to another client via the server
@@ -225,6 +264,7 @@ class BaseSocketOperator(FileHandler, Logger):
         message = self.__construct_message(connection, body, "file")
         return message
 
+    @enforcer(recursive=True)
     def construct_command_body(self, command: str, connection: Type[StandardConnection] | str | None=None) -> schemas.CommandBody:
         """
         construct a command message to be issued directly to the server. The desired command must exist within
@@ -238,6 +278,7 @@ class BaseSocketOperator(FileHandler, Logger):
         message = self.__construct_message(connection, body, "command")
         return message
 
+    @enforcer(recursive=True)
     def construct_authentication_body(self, connection: Type[StandardConnection] | str | None, password: str) -> schemas.AuthenticationBody:
         """
         construct an authentication body to submit password to gain admin permissions on the server
@@ -249,6 +290,7 @@ class BaseSocketOperator(FileHandler, Logger):
         message = self.__construct_message(connection, body, "authentication")
         return message
 
+    @enforcer(recursive=True)
     def construct_connection(self, ip: str, conn: Any=None) -> Type[StandardConnection]:
         """
         create a connection object to be used for connection operations

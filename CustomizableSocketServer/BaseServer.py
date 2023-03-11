@@ -6,7 +6,7 @@ import ssl
 import getpass
 import hashlib
 from typing import Type, Optional, Callable
-print(__name__)
+from TypeEnforcement import type_enforcer as t
 try:
     from . import SocketOperations as so
     from . import exceptions as exc
@@ -17,10 +17,14 @@ except:
     import schemas
 
 
+enforcer = t.TypeEnforcer.enforcer
+
+
 class BaseServer(so.BaseSocketOperator):
     """
     Base server class.
     """
+    @enforcer(recursive=True)
     def __init__(self, cert_dir: str, key_dir: str, external_commands: dict={}, ip: str=so.LOCALHOST, port: int=8000, buffer_size: int=4096, log_dir: Optional[str]=None):
         # super init of basesocketoperator here
         super().__init__(commands=external_commands, port=port, buffer_size=buffer_size, executor=so.LEVEL_1_EXECUTOR, cert_path=cert_dir, key_path=key_dir)
@@ -41,10 +45,12 @@ class BaseServer(so.BaseSocketOperator):
         self.sock.bind((ip, port))
         self.sock.listen(10)
 
-    def __get_clients(self, **kwargs: dict) -> list:
+    @enforcer(recursive=True)
+    def __get_clients(self, **kwargs: dict | None) -> list:
         return [(conn.hostname, conn.ip) for conn in self.connections]
     
-    def __get_commands(self, **kwargs: dict) -> list:
+    @enforcer(recursive=True)
+    def __get_commands(self, **kwargs: dict | None) -> list:
         return list(self.commands.keys())
 
     def __find_connection(self, destination_ip: str) -> so.ServerSideConnection:
@@ -53,16 +59,19 @@ class BaseServer(so.BaseSocketOperator):
                 return connection
         raise exc.ConnectionNotFoundError()
 
+    @enforcer(recursive=True)
     def __check_admin(self, **kwargs: dict) -> None:
         if not kwargs['admin']:
             raise exc.InsufficientPriveleges()
 
+    @enforcer(recursive=True)
     def __shutdown(self, **kwargs: dict) -> None:
         self.__check_admin(**kwargs)
         for connection in self.connections:
             shutdown_message = self.construct_base_body(self.ip, connection.ip, "Shutting Down Server")
             self.__server_send_all(shutdown_message, connection)
 
+    @enforcer(recursive=True)
     def __server_send_all(self, data: Type[schemas.BaseSchema]):
         connection = self.__find_connection(data.destination_ip)
         data = self.prepare_all(data)
@@ -70,6 +79,7 @@ class BaseServer(so.BaseSocketOperator):
             print(type(connection))
             connection.conn.send(fragment)
 
+    @enforcer(recursive=True)
     def __process_requests(self, source_connection: so.ServerSideConnection) -> None:
         try:
             agg_data: schemas.BaseSchema = self.recv_all(source_connection)
@@ -118,15 +128,18 @@ class BaseServer(so.BaseSocketOperator):
         except Exception as e:
             self.logger.error(str(e))
 
+    @enforcer(recursive=True)
     def __hash(self, password: str) -> str:
         return hashlib.sha256(password.encode()).hexdigest()
 
+    @enforcer(recursive=True)
     def __verify_credential(self, password: str, conn: so.ServerSideConnection) -> str:
         if self.__hash(password) == self.password:
             conn.admin = True
             return "Password authentication successful. Priveleges upgraded" 
         raise exc.AuthenticationFailure()
 
+    @enforcer(recursive=True)
     def __initialize_password(self, password: str | None=None) -> None:
         if not password:
             while True:
@@ -139,12 +152,6 @@ class BaseServer(so.BaseSocketOperator):
             raise exc.PasswordLengthException()
                 
         self.password = self.__hash(password)
-
-    def add_command(self, command: dict[str, Callable]):
-        """
-        accepts a command to add to the object command list. Must be in the format {"command_name":function}
-        """
-        self.commands.update(command)
 
     def start(self):
         """
@@ -160,7 +167,8 @@ class BaseServer(so.BaseSocketOperator):
                 callback()
 
     def __str__(self):
-        return f"""
+        return \
+        f"""
         IP: {self.ip}
         PORT: {self.port}
         """

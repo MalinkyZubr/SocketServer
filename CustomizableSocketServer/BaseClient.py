@@ -8,6 +8,7 @@ import threading
 import pickle
 import subprocess
 from typing import Optional, Callable
+from TypeEnforcement import type_enforcer as t
 try:
     from . import SocketOperations as so
     from . import exceptions as exc
@@ -20,11 +21,15 @@ except:
     import utilities
 
 
+enforcer = t.TypeEnforcer.enforcer
+
+
 class BaseClient(so.BaseSocketOperator):
+    @enforcer(recursive=True)
     def __init__(self, cert_path: str, standard_rules: list[Callable]=[], 
                  executor: int=so.NO_EXECUTOR, background: bool=False, allowed_file_types: list=[], 
                  server_ip: str=so.LOCALHOST, port: int=8000, buffer_size: int=4096, 
-                 log_dir: Optional[str]=None, commands: dict[str:Callable]={}):
+                 log_dir: Optional[str]=None, commands: dict[str,Callable]={}):
         
         logging.basicConfig(level=logging.INFO)
         if isinstance(commands, str) and isinstance(standard_rules, str):
@@ -43,13 +48,16 @@ class BaseClient(so.BaseSocketOperator):
         self.sock: IO = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sel = selectors.DefaultSelector()
 
-    def unpack_config_commands(self, config: dict)->tuple[dict[str:Callable], list[Callable]]:
+    @enforcer(recursive=True)
+    def unpack_config_commands(self, config: dict)->tuple[dict[str,Callable], list[Callable]]:
         self.commands = pickle.loads(bytes(config['commands']))
 
+    @enforcer(recursive=True)
     def bounceback(self, message: Type[schemas.BaseBody], response: str):
         bounceback = self.construct_base_body(self, message.origin_ip, response)
         self.client_send_all(bounceback)
 
+    @enforcer(recursive=True)
     def secure_file_download(self, file: Type[schemas.FileBody]):
         if self.allowed_file_types and file.file_type not in self.allowed_file_types:
             decision = str(input(f"The file {file.file_name + file.file_type} is not approved to be automatically downloaded. Do you still want to download it?\n(y/n)"))
@@ -58,6 +66,7 @@ class BaseClient(so.BaseSocketOperator):
             else:
                 raise exc.FileNotApproved
 
+    @enforcer(recursive=True)
     def filter(self, message: Type[schemas.BaseSchema]):
         message_type = message.message_type
         match message_type:
@@ -91,6 +100,7 @@ class BaseClient(so.BaseSocketOperator):
         agg_data = self.recv_all(self.__server_connection)
         self.filter(agg_data)
         
+    @enforcer(recursive=True)
     def client_send_all(self, data: Type[schemas.BaseSchema]):
         """
         send a request to the established socket connection
@@ -139,6 +149,7 @@ class BaseClient(so.BaseSocketOperator):
     
 
 class AdminClient(BaseClient):
+    @enforcer(recursive=True)
     def submit_password(self, password: str):
         auth_message = self.construct_authentication_body(password)
         self.client_send_all(auth_message)
