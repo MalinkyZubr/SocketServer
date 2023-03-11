@@ -9,7 +9,7 @@ import ssl
 import subprocess
 import argparse
 import typing
-from TypeEnforcement import type_enforcer
+from TypeEnforcement import type_enforcer as t
 try:
     from . import schemas
     from . import exceptions as exc
@@ -77,10 +77,43 @@ class Logger:
                 self.logger.addHandler(f_handler)
 
 
+class Command:
+    @enforcer
+    def __init__(self, name: str, command: Callable):
+        self.name = name
+        self.command = command
+        self.hints = self.__generate_hints_dict(command)
+        self.help_menu = self.__generate_help_menu(self.hints)
+
+    @enforcer
+    def __generate_hints_dict(self, func: Callable) -> dict:
+        args = func.__code__.co_varnames
+        incomplete_hints = typing.get_type_hints(func)
+
+        if 'return' in incomplete_hints:
+            incomplete_hints.pop('return')
+
+        complete_hints: dict = dict()
+        
+        for arg_name in args:
+            try:
+                complete_hints.update({arg_name:incomplete_hints[arg_name]})
+            except KeyError:
+                complete_hints.update({arg_name:typing.Any})
+        
+        return complete_hints
+    
+    @enforcer(recursive=True)
+    def __generate_help_menu(self, args: dict) -> str:
+        func_help = f"Command {self.command}:\n"
+        for arg, dtype in args.items():
+            func_help += f"\t--{arg} expects a(n) {dtype}\n"
+
+
 class BaseSocketOperator(FileHandler, Logger):
     @enforcer(recursive=True)
-    def __init__(self, commands: dict[str,Callable], port: int, buffer_size: int, executor: int=NO_EXECUTOR, cert_path: str | None=None, key_path: str | None=None):
-        self.commands = commands
+    def __init__(self, port: int, buffer_size: int, executor: int=NO_EXECUTOR, cert_path: str | None=None, key_path: str | None=None):
+        self.commands = dict() # update this so it iterates to create command things, the argparse
         self.port = port
         self.my_hostname = socket.gethostname()
         self.my_ip = socket.gethostbyname(self.my_hostname)
@@ -182,30 +215,6 @@ class BaseSocketOperator(FileHandler, Logger):
         """
         self.type_set = "client"
 
-    def generate_hints_dict(self, func: Callable) -> dict:
-        args = func.__code__.co_varnames
-        incomplete_hints = typing.get_type_hints(func)
-
-        if 'return' in incomplete_hints:
-            incomplete_hints.pop('return')
-
-        complete_hints: dict = dict()
-        
-        for arg_name in args:
-            try:
-                complete_hints.update({arg_name:incomplete_hints[arg_name]})
-            except KeyError:
-                complete_hints.update({arg_name:typing.Any})
-        
-        return complete_hints
-    
-    @enforcer(recursive=True)
-    def generate_help_menu(self, args: dict) -> str:
-        func_help = ""
-        for arg, dtype in args.items():
-            func_help += f"{arg} expects a(n) {dtype}\n"
-
-    
     @enforcer(recursive=True)
     def add_command(self, command: dict[str, Callable]):
         """
@@ -214,20 +223,29 @@ class BaseSocketOperator(FileHandler, Logger):
         name, command = list(command.items())[0]
         if name in self.commands:
             raise exc.CommandAlreadyExists()
-        varnames = self.generate_hints_dict(command)
-        for varname in varnames:
+        command = Command(name, command)
+        for varname in command.hints:
             if varname not in list(vars(self.parser.parse_args()).keys()):
                 self.parser.add_argument(f"--{varname}")
-        self.commands.update(command)
+        self.commands.update({name:command})
 
     @enforcer(recursive=True)
-    def command_executor(self, request: Type[schemas.BaseSchema]) -> schemas.BaseSchema:
-        command = request.request_body['command']
-        try:
-            command = vars(self.parser.parse_args(command))
-            results = self.commands[command['command']](**command)
-        except argparse.ArgumentError:
-            results 
+    def command_executor(self, request: Type[schemas.BaseSchema], source_connection: Type[StandardConnection]) -> schemas.BaseSchema:
+        command = request.request_body['command'].split(' ')
+        command_name = command[0]
+        if (command_name in self.commands and self.executor < LEVEL_1_EXECUTOR) or (command_name not in self.commands and self.executor < LEVEL_2_EXECUTOR):
+            raise exc.CommandExecutionNotAllowed
+        elif command_name in self.commands and self.executor >= LEVEL_1_EXECUTOR:
+            try:
+                command = vars(self.parser.parse_args(command[1:]))
+                results = self.commands[command_name].command(**command)
+            except TypeError:
+                raise exc.CommandExecutionError(self.commands[command_name].help_menu)
+        elif command_name not in self.commands and self.executor == LEVEL_1_EXECUTOR:
+            raise exc.CommandNotFound
+        elif command_name not in self.commands and self.executor >= LEVEL_2_EXECUTOR:
+            results = subprocess.check_output(command)
+        return results
 
     @enforcer(recursive=True)
     def __construct_message(self, connection: Type[StandardConnection] | str, request_body: Type[schemas.BaseBody], message_type: str) -> Type[schemas.BaseSchema]:

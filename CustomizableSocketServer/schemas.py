@@ -17,7 +17,7 @@ class FileBody(BaseBody):
 
 
 class CommandBody(BaseBody):
-    command: list
+    command: str
 
 
 class AuthenticationBody(BaseBody):

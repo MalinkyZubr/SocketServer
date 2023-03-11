@@ -25,9 +25,9 @@ class BaseServer(so.BaseSocketOperator):
     Base server class.
     """
     @enforcer(recursive=True)
-    def __init__(self, cert_dir: str, key_dir: str, external_commands: dict={}, ip: str=so.LOCALHOST, port: int=8000, buffer_size: int=4096, log_dir: Optional[str]=None):
+    def __init__(self, cert_dir: str, key_dir: str, ip: str=so.LOCALHOST, port: int=8000, buffer_size: int=4096, log_dir: Optional[str]=None):
         # super init of basesocketoperator here
-        super().__init__(commands=external_commands, port=port, buffer_size=buffer_size, executor=so.LEVEL_1_EXECUTOR, cert_path=cert_dir, key_path=key_dir)
+        super().__init__(port=port, buffer_size=buffer_size, executor=so.LEVEL_1_EXECUTOR, cert_path=cert_dir, key_path=key_dir)
 
         logging.basicConfig(level=logging.INFO)
         self.create_logger(log_dir=log_dir)
@@ -37,7 +37,12 @@ class BaseServer(so.BaseSocketOperator):
         self.sel = selectors.DefaultSelector()
         self.password = ""
 
-        self.commands.update({"get_clients":self.__get_clients, 'shutdown':self.__shutdown, "get_commands":self.__get_commands})
+        non_admin_commands = {"get_commands":self.__get_commands}
+        admin_commands = {"get_clients":self.__get_clients, 'shutdown':self.__shutdown}
+        for name, command in non_admin_commands.items():
+            self.add_command({name:command}, admin=False)
+        for name, command in admin_commands.items():
+            self.add_command({name:command}, admin=True)
 
         # Socket Setup
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

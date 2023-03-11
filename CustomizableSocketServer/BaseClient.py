@@ -29,12 +29,10 @@ class BaseClient(so.BaseSocketOperator):
     def __init__(self, cert_path: str, standard_rules: list[Callable]=[], 
                  executor: int=so.NO_EXECUTOR, background: bool=False, allowed_file_types: list=[], 
                  server_ip: str=so.LOCALHOST, port: int=8000, buffer_size: int=4096, 
-                 log_dir: Optional[str]=None, commands: dict[str,Callable]={}):
+                 log_dir: Optional[str]=None):
         
         logging.basicConfig(level=logging.INFO)
-        if isinstance(commands, str) and isinstance(standard_rules, str):
-            self.commands, self.standard_rules = utilities.extract_config_pickles(commands, standard_rules)
-        super().__init__(commands=commands, port=port, buffer_size=buffer_size, executor=executor, cert_path=cert_path)
+        super().__init__(port=port, buffer_size=buffer_size, executor=executor, cert_path=cert_path)
         self.create_logger(background=background, log_dir=log_dir)
         self.set_type_client()
         self.__server_connection = None
