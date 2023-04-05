@@ -27,7 +27,6 @@ NO_EXECUTOR: int = 0
 LEVEL_1_EXECUTOR: int = 1
 LEVEL_2_EXECUTOR: int = 2
 
-enforcer = t.TypeEnforcer.enforcer
 
 class SocketObject:
     """
