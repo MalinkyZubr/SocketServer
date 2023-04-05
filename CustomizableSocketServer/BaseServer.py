@@ -80,7 +80,7 @@ class BaseServer(so.BaseSocketOperator):
             connection.conn.send(fragment)
 
     @enforcer(recursive=True)
-    def __process_requests(self, source_connection: so.ServerSideConnection) -> None:
+    def __process_requests(self, source_connection: so.Serverdection) -> None:
         try:
             agg_data: schemas.BaseSchema = self.recv_all(source_connection)
             message_type: str = agg_data.message_type
