@@ -1,5 +1,9 @@
 MUST DO RESTRUCTURING OF COMMAND EXECUTION PROCESSES. The current schema, with command and kwargs as separate attributes of the command body schema does not translate well to be compatible with subprocess shell commands. THis must be modified to work more smoothly, but will require significant restructuring, and planning. Maybe make it so the command constructor can decide whether to use a list or a dict? Maybe use a more standardized protocol within the custom commands inside of the base server and base client
 
+BLOAT ALERT!!! YOU CAN USE ARGPARSE TO DO THE COMMAND FUNCTIONS, STUPID!! ARGPARSE PARSE ARGS CAN TAKE LIST OF STRINGS. USE THESE ON THE BUILT IN FUNCTIONS. IF BUILT IN FUNCTION NOT DETECTED *JUST RUN THE SUBPROCESS*
+
+DEVELOP A METHOD TO DO ENFORCED TYPE HINTING!
+
 too much schema bloat! simplify schema operations immediately!!!
 
 make it easier for users to send messages to either server or client

@@ -7,12 +7,17 @@ import logging
 import socket
 import ssl
 import subprocess
+import argparse
+import typing
+from TypeEnforcement import type_enforcer
 try:
     from . import schemas
     from . import exceptions as exc
+    from . import r_types
 except:
     import schemas
     import exceptions as exc
+    import r_types
 
 
 DEFAULT_ROUTE: str = "0.0.0.0"
@@ -56,7 +61,7 @@ class FileHandler:
 
 
 class Logger:
-    def create_logger(self, background: int=0, log_dir: Optional[str]=None):
+    def create_logger(self, background: int=0, log_dir: str | None=None):
         """
         creates the logger object
         """
@@ -73,21 +78,20 @@ class Logger:
 
 
 class BaseSocketOperator(FileHandler, Logger):
-    def __init__(self, commands: dict[str:Callable], port: int, buffer_size: int, executor: int=NO_EXECUTOR, cert_path: str | None=None, key_path: str | None=None):
-        self.commands = commands
+    def __init__(self, port: int, buffer_size: int, cert_path: str | None=None, key_path: str | None=None):
         self.port = port
         self.my_hostname = socket.gethostname()
         self.my_ip = socket.gethostbyname(self.my_hostname)
-        self.executor = executor
         self.cert_path = cert_path
         self.key_path = key_path
+
         try:
             self.__set_buffer_size(buffer_size)
-        except:
-            print("Buffersize defaulting to 4096")
+        except exc.ImproperBufferSize as e:
+            print(e + "\n\nBuffersize defaulting to 4096")
             self.__set_buffer_size(4096)
 
-    def ssl_wrap(self, connection: SocketObject, address: str):
+    def ssl_wrap(self, connection, address: str):
         if self.type_set == 'server':
             context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
             context.load_cert_chain(self.cert_path, self.key_path)
@@ -167,35 +171,7 @@ class BaseSocketOperator(FileHandler, Logger):
         """
         self.type_set = "client"
 
-    def __process_command(self, command_body: schemas.CommandBody) -> tuple[str, dict]:
-        command = command_body['command']
-        kwargs = command_body['kwargs']
-        return command, kwargs
-    
-    def __unpack_console_command(self, command, kwargs):
-        command = [command]
-        for key, value in kwargs.items():
-            command + [key, value]
-        if not command[-1]:
-            return command[:-1]
-        return command
-
-    def command_executor(self, request: Type[schemas.BaseSchema]) -> schemas.BaseSchema:
-        command, kwargs = self.__process_command(request.request_body)
-        if self.executor and command in self.commands:
-            result = self.commands[command](**kwargs)
-            print(result)
-        elif self.executor == LEVEL_1_EXECUTOR and command not in self.commands: 
-            raise exc.CommandNotFound
-        elif self.executor == LEVEL_2_EXECUTOR: 
-            command = self.__unpack_console_command(command, kwargs)
-            result = str(subprocess.check_output(command, shell=True).decode()) # make this operational. Must reformat the schema to make this work with subproecess poppen   
-        else:
-            raise exc.CommandExecutionNotAllowed
-        send_data = self.construct_base_body(connection=request.origin_ip, content=result)
-        return send_data
-
-    def __construct_message(self, connection: Type[StandardConnection] | str, request_body: Type[schemas.BaseBody], message_type: str) -> Type[schemas.BaseSchema]:
+    def construct_message(self, connection: Type[StandardConnection] | str, request_body: Any, message_type: str) -> Type[schemas.BaseSchema]:
         try:
             ip = connection.ip
         except:
@@ -207,15 +183,7 @@ class BaseSocketOperator(FileHandler, Logger):
                             time=str(datetime.datetime.now().strftime("%H:%M:%S")))
         return schema
 
-    def construct_base_body(self, connection: Type[StandardConnection] | str, content: dict | list | str) -> schemas.BaseBody:
-        """
-        construct a standard message to be forwarded to another client via the server
-        """
-        body = schemas.BaseBody(content=content)
-        message = self.__construct_message(connection, body, "standard")
-        return message
-
-    def construct_file_body(self, connection: Type[StandardConnection] | str, source_path: str, target_path: str | None) -> schemas.FileBody:
+    def construct_file_body(self, source_path: str, target_path: str | None) -> schemas.FileBody:
         """
         construct a file transfer message to be forwarded to another client via the server
         """
@@ -224,38 +192,7 @@ class BaseSocketOperator(FileHandler, Logger):
         body = schemas.FileBody(file_name=file_name, 
                         target_path=target_path,
                         file_content=file_content)
-        message = self.__construct_message(connection, body, "file")
-        return message
-
-    def construct_command_body(self, command: str, kwargs: dict, connection: Type[StandardConnection] | str | None=None) -> schemas.CommandBody:
-        """
-        construct a command message to be issued directly to the server. The desired command must exist within
-        the server's command dictionary, as is, or as added by the user
-        set connection to None if you only want to send command to the server.
-        """
-
-        if not connection:
-            connection = 'server'
-        if command in list(self.commands.keys()):
-            command_type = schemas.STANDARD_COMMAND
-        else:
-            command_type = schemas.CONSOLE_COMMAND
-        body = schemas.CommandBody(command=command,
-                           kwargs=kwargs,
-                           command_type=command_type)
-        message = self.__construct_message(connection, body, "command")
-        return message
-
-    def construct_authentication_body(self, connection: Type[StandardConnection] | str | None, password: str) -> schemas.AuthenticationBody:
-        """
-        construct an authentication body to submit password to gain admin permissions on the server
-        set connection to None if you want to send the authentication to only the server
-        """
-        if not connection:
-            connection = 'server'
-        body = schemas.AuthenticationBody(password=password)
-        message = self.__construct_message(connection, body, "authentication")
-        return message
+        return body
 
     def construct_connection(self, ip: str, conn: Any=None) -> Type[StandardConnection]:
         """

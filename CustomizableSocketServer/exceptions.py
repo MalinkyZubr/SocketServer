@@ -7,6 +7,7 @@ FILE_NOT_ALLOWED_MESSAGE = "The file is not approved for download"
 COMMAND_NOT_ALLOWED_MESSAGE = "Command execution is not permitted on this client"
 AUTHENTICATION_PROCESS_NONEXISTANT_ERROR = "Authentication not required"
 COMMAND_NOT_FOUND_MESSAGE = "Command not found"
+COMMAND_ALREADY_EXISTS_MESSAGE = "Command already exists in the command list. Change its name"
 
 
 class PasswordLengthException(Exception):
@@ -77,4 +78,12 @@ class CommandNotFound(IndexError):
     Raise an exception when requested command doesnt exist
     """
     def __init__(self, message=COMMAND_NOT_FOUND_MESSAGE):
+        super().__init__(message)
+
+
+class CommandAlreadyExists(AttributeError):
+    """
+    Raise an exception when requested command already exists
+    """
+    def __init__(self, message=COMMAND_ALREADY_EXISTS_MESSAGE):
         super().__init__(message)

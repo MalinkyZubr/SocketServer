@@ -6,24 +6,10 @@ STANDARD_COMMAND: str = "standard"
 CONSOLE_COMMAND: str = "console"
 
 
-class BaseBody(BaseModel):
-    content: str | dict | list = ""
-
-
-class FileBody(BaseBody):
+class FileBody(BaseModel):
     file_name: str
     target_path: str | None
     file_content: bytes
-
-
-class CommandBody(BaseBody):
-    command_type: str = STANDARD_COMMAND
-    command: str
-    kwargs: dict
-
-
-class AuthenticationBody(BaseBody):
-    password: str
 
 
 class BaseSchema(BaseModel):

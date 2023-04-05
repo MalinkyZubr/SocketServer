@@ -1,5 +1,7 @@
-import subprocess
+import argparse
 
 
-x = subprocess.check_output(['silly'], shell=True).decode()
-print(x)
+parser = argparse.ArgumentParser(prog=__name__)
+parser.add_argument("-v")
+
+print(tuple(vars(parser.parse_args()).keys()))
