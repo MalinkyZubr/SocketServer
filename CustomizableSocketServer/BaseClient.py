@@ -25,24 +25,19 @@ enforcer = t.TypeEnforcer.enforcer
 
 
 class BaseClient(so.BaseSocketOperator):
-    def __init__(self, cert_path: str, standard_rules: list[Callable]=[], 
-                 executor: int=so.NO_EXECUTOR, background: bool=False, allowed_file_types: list=[], 
+    def __init__(self, cert_path: str, 
                  server_ip: str=so.LOCALHOST, port: int=8000, buffer_size: int=4096, 
-                 log_dir: Optional[str]=None, commands: dict[str,Callable]={}):
+                 log_dir: Optional[str]=None):
         
         logging.basicConfig(level=logging.INFO)
-        super().__init__(commands=commands, port=port, buffer_size=buffer_size, executor=executor, cert_path=cert_path)
-        self.create_logger(background=background, log_dir=log_dir)
+        super().__init__(port=port, buffer_size=buffer_size, cert_path=cert_path)
+        self.create_logger(log_dir=log_dir)
         self.set_type_client()
         self.__server_connection = None
         
         self.server_ip = server_ip
         self.sock: IO = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sel = selectors.DefaultSelector()
-
-    def bounceback(self, message: Type[schemas.BaseBody], response: str):
-        bounceback = self.construct_base_body(self, message.origin_ip, response)
-        self.client_send_all(bounceback)
 
     def __receive_messages(self):
         agg_data = self.recv_all(self.__server_connection)
@@ -76,33 +71,9 @@ class BaseClient(so.BaseSocketOperator):
                 callback = key.data
                 callback()
 
-    def get_server_connection(self) -> so.StandardConnection:
-        """
-        return the connection to the server
-        """
-        return self.__server_connection
-        
-    def get_commands(self):
-        message = self.construct_command_body(self.server_ip, "get_commands")
-        self.client_send_all(message)
-        
-    def get_clients(self):
-        message = self.construct_command_body(self.server_ip, "get_clients")
-        self.client_send_all(message)
-
     def close_connection(self):
         client.sel.unregister(client.__server_connection.conn)
         client.__server_connection.conn.close()
-    
-
-class AdminClient(BaseClient):
-    def submit_password(self, password: str):
-        auth_message = self.construct_authentication_body(password)
-        self.client_send_all(auth_message)
-
-    def shutdown(self):
-        message = self.construct_command_body(self.server_ip, "shutdown")
-        self.client_send_all(message)
 
 
 if __name__ == "__main__":
@@ -128,7 +99,3 @@ if __name__ == "__main__":
 
     start_client_runtime()
 
-
-class ConfigWrappedClient:
-    def __init__(self, client: Type[BaseClient]):
-        pass
