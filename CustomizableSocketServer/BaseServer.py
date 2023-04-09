@@ -6,7 +6,6 @@ import ssl
 import getpass
 import hashlib
 from typing import Type, Optional, Callable
-from TypeEnforcement import type_enforcer as t
 try:
     from . import SocketOperations as so
     from . import exceptions as exc
