@@ -2,9 +2,9 @@ import selectors
 import socket
 import json
 import logging
-import ssl
-import getpass
+import sys
 import hashlib
+import signal
 from typing import Type, Optional, Callable
 try:
     from . import SocketOperations as so
@@ -27,7 +27,7 @@ class BaseServer(so.BaseSocketOperator):
                  request_process: Callable | None=None, acceptance_process: Callable | None = None,
                  password: str | None=None):
         # super init of basesocketoperator here
-        super().__init__(port=port, buffer_size=buffer_size, executor=so.LEVEL_1_EXECUTOR, cert_path=cert_dir, key_path=key_dir)
+        super().__init__(port=port, buffer_size=buffer_size, cert_path=cert_dir, key_path=key_dir)
 
         logging.basicConfig(level=logging.INFO)
         self.create_logger(log_dir=log_dir)
@@ -40,11 +40,16 @@ class BaseServer(so.BaseSocketOperator):
         self.request_process = request_process
         self.password = password
 
+        signal.signal(signal.SIGINT, self.interrupt_handler)
+
         # Socket Setup
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setblocking(False)
         self.sock.bind((ip, port))
         self.sock.listen(10)
+
+    def interrupt_handler(self, sig, frame):
+        self.shutdown()
 
     def __find_connection(self, destination_ip: str) -> so.ServerSideConnection:
         for connection in self.connections:
@@ -56,15 +61,16 @@ class BaseServer(so.BaseSocketOperator):
         return [(connection.hostname, connection.ip) for connection in self.connections]
 
     def shutdown(self) -> None:
+        self.broadcast("Shutting Down Server")
         for connection in self.connections:
-            shutdown_message = self.construct_base_body(self.ip, connection.ip, "Shutting Down Server")
-            self.__server_send_all(shutdown_message, connection)
+            self.sel.unregister(connection.conn)
+            connection.conn.close()
+        sys.exit()
 
     def __server_send_all(self, data: Type[schemas.BaseSchema]):
         connection = self.__find_connection(data.destination_ip)
         data = self.prepare_all(data)
         for fragment in data: 
-            print(type(connection))
             connection.conn.send(fragment)
 
     def broadcast(self, data: Type[schemas.BaseSchema]):
@@ -75,11 +81,9 @@ class BaseServer(so.BaseSocketOperator):
                 try: connection.conn.send(fragment)
                 except: continue
 
-    def __process_requests(self, source_connection: so.Serverdection) -> None:
+    def __process_requests(self, source_connection: so.ServerSideConnection) -> None:
         try:
             agg_data: schemas.BaseSchema = self.recv_all(source_connection)
-
-            print(f'\n\nAGG DATA: {agg_data}\n\n')
             if self.request_process:
                 agg_data = self.request_process(agg_data)
 
@@ -92,7 +96,7 @@ class BaseServer(so.BaseSocketOperator):
 
         except Exception as error:
             self.logger.error(str(error))
-            send_data = self.construct_base_body(connection=source_connection, content=str(error))
+            send_data = self.construct_message(connection=source_connection, content=str(error))
             self.__server_send_all(send_data)
 
     def __accept_connection(self):
@@ -140,7 +144,8 @@ class BaseServer(so.BaseSocketOperator):
 
 if __name__ == "__main__":
     server = BaseServer(
-        key_dir=r"C:\Users\ahuma\Desktop\certs\key.pem",
-        cert_dir=r"C:\Users\ahuma\Desktop\certs\cert.pem"
+        ip="192.168.0.161",
+        key_dir=r"C:\Users\ahuma\Desktop\programming\Networking\SocketServer\key.pem",
+        cert_dir=r"C:\Users\ahuma\Desktop\programming\Networking\SocketServer\cert.pem"
     )
     server.start()
