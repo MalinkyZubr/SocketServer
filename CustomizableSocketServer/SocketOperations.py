@@ -9,7 +9,6 @@ import ssl
 import subprocess
 import argparse
 import typing
-from TypeEnforcement import type_enforcer as t
 try:
     from . import schemas
     from . import exceptions as exc
@@ -78,14 +77,12 @@ class Logger:
 
 
 class Command:
-    @enforcer
     def __init__(self, name: str, command: Callable):
         self.name = name
         self.command = command
         self.hints = self.__generate_hints_dict(command)
         self.help_menu = self.__generate_help_menu(self.hints)
 
-    @enforcer
     def __generate_hints_dict(self, func: Callable) -> dict:
         args = func.__code__.co_varnames
         incomplete_hints = typing.get_type_hints(func)
@@ -103,7 +100,6 @@ class Command:
         
         return complete_hints
     
-    @enforcer(recursive=True)
     def __generate_help_menu(self, args: dict) -> str:
         func_help = f"Command {self.command}:\n"
         for arg, dtype in args.items():
@@ -151,7 +147,7 @@ class BaseSocketOperator(FileHandler, Logger):
         return b64.b64encode(json.dumps(data).encode())
 
     def __calculate_data_length(self, data: bytes) -> int:
-        num_fragments = int(len(data) / self.buffer_size) + 1# what about the edgecase where the data size is a multiple of the self size?
+        num_fragments = int(len(data) / self.buffer_size) + 1
         return num_fragments
 
     def prepare_all(self, package: Type[schemas.BaseSchema]) -> list:

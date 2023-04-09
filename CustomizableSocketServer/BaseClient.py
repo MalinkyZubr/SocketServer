@@ -8,7 +8,6 @@ import threading
 import pickle
 import subprocess
 from typing import Optional, Callable
-from TypeEnforcement import type_enforcer as t
 try:
     from . import SocketOperations as so
     from . import exceptions as exc
@@ -19,9 +18,6 @@ except:
     import exceptions as exc
     import schemas
     import utilities
-
-
-enforcer = t.TypeEnforcer.enforcer
 
 
 class BaseClient(so.BaseSocketOperator):

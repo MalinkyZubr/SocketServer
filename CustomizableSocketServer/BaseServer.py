@@ -19,9 +19,6 @@ except:
     import r_types
 
 
-enforcer = t.TypeEnforcer.enforcer
-
-
 class BaseServer(so.BaseSocketOperator):
     """
     Base server class.
