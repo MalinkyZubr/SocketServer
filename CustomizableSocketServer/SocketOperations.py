@@ -9,7 +9,6 @@ import ssl
 import subprocess
 import argparse
 import typing
-from TypeEnforcement import type_enforcer
 try:
     from . import schemas
     from . import exceptions as exc
@@ -77,6 +76,36 @@ class Logger:
                 self.logger.addHandler(f_handler)
 
 
+class Command:
+    def __init__(self, name: str, command: Callable):
+        self.name = name
+        self.command = command
+        self.hints = self.__generate_hints_dict(command)
+        self.help_menu = self.__generate_help_menu(self.hints)
+
+    def __generate_hints_dict(self, func: Callable) -> dict:
+        args = func.__code__.co_varnames
+        incomplete_hints = typing.get_type_hints(func)
+
+        if 'return' in incomplete_hints:
+            incomplete_hints.pop('return')
+
+        complete_hints: dict = dict()
+        
+        for arg_name in args:
+            try:
+                complete_hints.update({arg_name:incomplete_hints[arg_name]})
+            except KeyError:
+                complete_hints.update({arg_name:typing.Any})
+        
+        return complete_hints
+    
+    def __generate_help_menu(self, args: dict) -> str:
+        func_help = f"Command {self.command}:\n"
+        for arg, dtype in args.items():
+            func_help += f"\t--{arg} expects a(n) {dtype}\n"
+
+
 class BaseSocketOperator(FileHandler, Logger):
     def __init__(self, port: int, buffer_size: int, cert_path: str | None=None, key_path: str | None=None):
         self.port = port
@@ -118,7 +147,7 @@ class BaseSocketOperator(FileHandler, Logger):
         return b64.b64encode(json.dumps(data).encode())
 
     def __calculate_data_length(self, data: bytes) -> int:
-        num_fragments = int(len(data) / self.buffer_size) + 1# what about the edgecase where the data size is a multiple of the self size?
+        num_fragments = int(len(data) / self.buffer_size) + 1
         return num_fragments
 
     def prepare_all(self, package: Type[schemas.BaseSchema]) -> list:

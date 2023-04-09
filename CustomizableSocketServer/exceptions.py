@@ -87,3 +87,12 @@ class CommandAlreadyExists(AttributeError):
     """
     def __init__(self, message=COMMAND_ALREADY_EXISTS_MESSAGE):
         super().__init__(message)
+
+
+class CommandExecutionError(Exception):
+    """
+    Raise an exception when command fails to execute
+    """
+    def __init__(self, help_menu):
+        message = f"Command failed to execute due to incorrect parameters. If correct parameters were entered, please check function {help_menu}"
+        super().__init__(message)
